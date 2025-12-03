@@ -316,10 +316,9 @@ export default function Home() {
   const handleExportJson = useCallback(() => {
     if (!currentPage) return;
 
-    // Only export confirmed changes
-    const confirmedChanges = currentPage.changes.filter((c) => c.approved);
+    // Export all changes regardless of confirmation status
     const exportData = {
-      changes: confirmedChanges.map(changeToRawChange),
+      changes: currentPage.changes.map(changeToRawChange),
     };
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
