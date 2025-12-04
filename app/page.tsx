@@ -308,6 +308,21 @@ export default function Home() {
     setIsDrawingMode(true);
   }, []);
 
+  const handleChangeLocationUpdate = useCallback(
+    (changeId: string, newLocation: BoundingBox) => {
+      if (!currentPage) return;
+
+      // Save to undo stack before updating
+      setUndoStack((prev) => [...prev.slice(-19), { pageId: currentPage.id, changes: [...currentPage.changes] }]);
+
+      const updatedChanges = currentPage.changes.map((c) =>
+        c.id === changeId ? { ...c, location: newLocation } : c
+      );
+      updatePageChanges(currentPage.id, updatedChanges);
+    },
+    [currentPage, updatePageChanges]
+  );
+
   const handleDeletePage = useCallback(
     (pageId: string) => {
       deletePage(pageId);
@@ -634,6 +649,7 @@ export default function Home() {
                   drawingState={drawingState}
                   onDrawComplete={handleDrawComplete}
                   onDrawingStateChange={setDrawingState}
+                  onChangeLocationUpdate={handleChangeLocationUpdate}
                   zoomLevel={zoomLevel}
                   onZoomChange={setZoomLevel}
                 />

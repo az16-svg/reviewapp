@@ -3,6 +3,17 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import type { Change, BoundingBox, DrawingState } from '@/types/change';
 
+// Resize handle types (including 'move' for dragging the entire box)
+type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'move' | null;
+
+interface ResizeState {
+  changeId: string;
+  handle: ResizeHandle;
+  originalBox: BoundingBox;
+  currentBox: BoundingBox;
+  startCoords?: { x: number; y: number }; // For tracking move offset
+}
+
 interface ImageViewerProps {
   imageData: string;
   imageWidth: number;
@@ -13,25 +24,52 @@ interface ImageViewerProps {
   drawingState: DrawingState | null;
   onDrawComplete: (box: BoundingBox) => void;
   onDrawingStateChange?: (state: DrawingState | null) => void;
+  onChangeLocationUpdate?: (changeId: string, newLocation: BoundingBox) => void;
   zoomLevel?: number;
   onZoomChange?: (zoom: number) => void;
 }
 
 // Bounding box colors
 const COLORS = {
-  approved: 'rgba(59, 130, 246, 0.7)',      // Light blue for approved
-  hoveredApproved: 'rgba(96, 165, 250, 0.8)', // Lighter blue for hovered+approved
-  drawing: 'rgba(59, 130, 246, 0.5)',       // Blue for drawing preview
+  approved: 'rgba(59, 130, 246, 0.7)',
+  hoveredApproved: 'rgba(96, 165, 250, 0.8)',
+  drawing: 'rgba(59, 130, 246, 0.5)',
+  resizing: 'rgba(234, 88, 12, 0.8)', // Darker orange
 };
 
-// Generate animated hover color (cycles between orange and yellow)
+const HANDLE_SIZE = 8; // Size of resize handles in pixels
+const HANDLE_HIT_AREA = 12; // Hit area for detecting handle hover/click
+
+// Generate animated hover color
 function getAnimatedHoverColor(time: number): string {
-  const cycle = (Math.sin(time * 0.005) + 1) / 2; // 0 to 1, ~1.25s cycle
+  const cycle = (Math.sin(time * 0.005) + 1) / 2;
   const r = 255;
-  const g = Math.round(165 + cycle * 90); // 165 to 255
-  const b = Math.round(cycle * 100); // 0 to 100
-  const alpha = 0.4 + cycle * 0.3; // 0.4 to 0.7
+  const g = Math.round(165 + cycle * 90);
+  const b = Math.round(cycle * 100);
+  const alpha = 0.4 + cycle * 0.3;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Get cursor style for resize handle
+function getCursorForHandle(handle: ResizeHandle): string {
+  switch (handle) {
+    case 'nw':
+    case 'se':
+      return 'nwse-resize';
+    case 'ne':
+    case 'sw':
+      return 'nesw-resize';
+    case 'n':
+    case 's':
+      return 'ns-resize';
+    case 'e':
+    case 'w':
+      return 'ew-resize';
+    case 'move':
+      return 'move';
+    default:
+      return 'default';
+  }
 }
 
 export function ImageViewer({
@@ -44,23 +82,67 @@ export function ImageViewer({
   drawingState,
   onDrawComplete,
   onDrawingStateChange,
+  onChangeLocationUpdate,
   zoomLevel = 1,
   onZoomChange,
 }: ImageViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
+  const [resizeState, setResizeState] = useState<ResizeState | null>(null);
+  const [hoveredHandle, setHoveredHandle] = useState<ResizeHandle>(null);
   const drawStartRef = useRef<{ x: number; y: number } | null>(null);
   const lastPinchDistanceRef = useRef<number | null>(null);
 
-  // Calculate display size based on zoom level
   const displayWidth = imageWidth * zoomLevel;
   const displayHeight = imageHeight * zoomLevel;
-
-  // Scale factor for drawing coordinates (zoom level)
   const scale = zoomLevel;
 
-  // Pinch-to-zoom using native event listeners (passive: false required to preventDefault)
+  // Get the box to use for a change (use resize preview if resizing)
+  const getDisplayBox = useCallback(
+    (change: Change): BoundingBox => {
+      if (resizeState && resizeState.changeId === change.id) {
+        return resizeState.currentBox;
+      }
+      return change.location;
+    },
+    [resizeState]
+  );
+
+  // Detect which resize handle is at a given position
+  const getHandleAtPosition = useCallback(
+    (x: number, y: number, box: BoundingBox): ResizeHandle => {
+      const hitArea = HANDLE_HIT_AREA / scale;
+      const { xmin, ymin, xmax, ymax } = box;
+
+      const nearLeft = Math.abs(x - xmin) < hitArea;
+      const nearRight = Math.abs(x - xmax) < hitArea;
+      const nearTop = Math.abs(y - ymin) < hitArea;
+      const nearBottom = Math.abs(y - ymax) < hitArea;
+      const inHorizontalRange = x >= xmin - hitArea && x <= xmax + hitArea;
+      const inVerticalRange = y >= ymin - hitArea && y <= ymax + hitArea;
+
+      // Corners first (higher priority)
+      if (nearLeft && nearTop) return 'nw';
+      if (nearRight && nearTop) return 'ne';
+      if (nearLeft && nearBottom) return 'sw';
+      if (nearRight && nearBottom) return 'se';
+
+      // Edges
+      if (nearTop && inHorizontalRange) return 'n';
+      if (nearBottom && inHorizontalRange) return 's';
+      if (nearLeft && inVerticalRange) return 'w';
+      if (nearRight && inVerticalRange) return 'e';
+
+      // Inside box = move
+      if (x > xmin && x < xmax && y > ymin && y < ymax) return 'move';
+
+      return null;
+    },
+    [scale]
+  );
+
+  // Pinch-to-zoom
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !onZoomChange) return;
@@ -83,11 +165,8 @@ export function ImageViewer({
         e.preventDefault();
         const currentDistance = getTouchDistance(e.touches[0], e.touches[1]);
         const delta = currentDistance - lastPinchDistanceRef.current;
-
-        // Scale the zoom change (adjust sensitivity)
         const zoomDelta = delta * 0.005;
         const newZoom = Math.min(4, Math.max(0.2, zoomLevel + zoomDelta));
-
         onZoomChange(newZoom);
         lastPinchDistanceRef.current = currentDistance;
       }
@@ -97,7 +176,6 @@ export function ImageViewer({
       lastPinchDistanceRef.current = null;
     };
 
-    // Use passive: false to allow preventDefault
     container.addEventListener('touchstart', handleTouchStart, { passive: false });
     container.addEventListener('touchmove', handleTouchMove, { passive: false });
     container.addEventListener('touchend', handleTouchEnd);
@@ -109,7 +187,7 @@ export function ImageViewer({
     };
   }, [onZoomChange, zoomLevel]);
 
-  // Draw bounding boxes on canvas with animation for hovered items
+  // Draw bounding boxes and resize handles
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || displayWidth === 0) return;
@@ -122,19 +200,39 @@ export function ImageViewer({
     const hasHoveredNonApproved = hoveredChange && !(hoveredChange.approved ?? false);
 
     const draw = (time: number = 0) => {
-      // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw approved boxes first (so hovered appears on top)
-      changes.filter((c) => c.approved ?? false).forEach((change) => {
-        const isAlsoHovered = hoveredChangeId === change.id;
-        drawBoundingBox(ctx, change.location, scale, isAlsoHovered ? COLORS.hoveredApproved : COLORS.approved);
-      });
+      // Draw approved boxes first
+      changes
+        .filter((c) => c.approved ?? false)
+        .forEach((change) => {
+          const box = getDisplayBox(change);
+          const isAlsoHovered = hoveredChangeId === change.id;
+          const isResizing = resizeState?.changeId === change.id;
+          const color = isResizing
+            ? COLORS.resizing
+            : isAlsoHovered
+              ? COLORS.hoveredApproved
+              : COLORS.approved;
+          drawBoundingBox(ctx, box, scale, color);
 
-      // Draw hovered box with animation (if not already drawn as approved)
+          // Draw resize handles for hovered change
+          if (isAlsoHovered && !isDrawingMode) {
+            drawResizeHandles(ctx, box, scale);
+          }
+        });
+
+      // Draw hovered non-approved box with animation
       if (hasHoveredNonApproved && hoveredChange) {
-        const animatedColor = getAnimatedHoverColor(time);
-        drawBoundingBox(ctx, hoveredChange.location, scale, animatedColor);
+        const box = getDisplayBox(hoveredChange);
+        const isResizing = resizeState?.changeId === hoveredChange.id;
+        const color = isResizing ? COLORS.resizing : getAnimatedHoverColor(time);
+        drawBoundingBox(ctx, box, scale, color);
+
+        // Draw resize handles
+        if (!isDrawingMode) {
+          drawResizeHandles(ctx, box, scale);
+        }
       }
 
       // Draw current drawing preview
@@ -148,28 +246,24 @@ export function ImageViewer({
         drawBoundingBox(ctx, box, scale, COLORS.drawing, true);
       }
 
-      // Continue animation if we have a hovered non-approved item
-      if (hasHoveredNonApproved) {
+      if (hasHoveredNonApproved || resizeState) {
         animationId = requestAnimationFrame(draw);
       }
     };
 
-    // Start drawing
-    if (hasHoveredNonApproved) {
+    if (hasHoveredNonApproved || resizeState) {
       animationId = requestAnimationFrame(draw);
     } else {
       draw(0);
     }
 
-    // Cleanup animation on unmount or dependency change
     return () => {
       if (animationId !== null) {
         cancelAnimationFrame(animationId);
       }
     };
-  }, [changes, hoveredChangeId, displayWidth, displayHeight, scale, isDrawingMode, drawingState]);
+  }, [changes, hoveredChangeId, displayWidth, displayHeight, scale, isDrawingMode, drawingState, resizeState, getDisplayBox]);
 
-  // Drawing handlers
   const getImageCoordinates = useCallback(
     (e: React.MouseEvent) => {
       const canvas = canvasRef.current;
@@ -186,10 +280,30 @@ export function ImageViewer({
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      if (!isDrawingMode) return;
-
       const coords = getImageCoordinates(e);
       if (!coords) return;
+
+      // Check for resize handle or move on hovered change
+      if (hoveredChangeId && !isDrawingMode && onChangeLocationUpdate) {
+        const hoveredChange = changes.find((c) => c.id === hoveredChangeId);
+        if (hoveredChange) {
+          const handle = getHandleAtPosition(coords.x, coords.y, hoveredChange.location);
+          if (handle) {
+            e.preventDefault();
+            setResizeState({
+              changeId: hoveredChangeId,
+              handle,
+              originalBox: { ...hoveredChange.location },
+              currentBox: { ...hoveredChange.location },
+              startCoords: { x: coords.x, y: coords.y },
+            });
+            return;
+          }
+        }
+      }
+
+      // Otherwise, handle drawing mode
+      if (!isDrawingMode) return;
 
       setIsDrawing(true);
       drawStartRef.current = coords;
@@ -200,15 +314,78 @@ export function ImageViewer({
         currentY: coords.y,
       });
     },
-    [isDrawingMode, getImageCoordinates, onDrawingStateChange]
+    [isDrawingMode, getImageCoordinates, onDrawingStateChange, hoveredChangeId, changes, getHandleAtPosition, onChangeLocationUpdate]
   );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent) => {
-      if (!isDrawingMode || !isDrawing || !drawStartRef.current) return;
-
       const coords = getImageCoordinates(e);
       if (!coords) return;
+
+      // Handle resizing or moving
+      if (resizeState) {
+        const { handle, originalBox, startCoords } = resizeState;
+        const newBox = { ...originalBox };
+
+        // Update box based on which handle is being dragged
+        switch (handle) {
+          case 'nw':
+            newBox.xmin = Math.min(coords.x, originalBox.xmax - 10);
+            newBox.ymin = Math.min(coords.y, originalBox.ymax - 10);
+            break;
+          case 'n':
+            newBox.ymin = Math.min(coords.y, originalBox.ymax - 10);
+            break;
+          case 'ne':
+            newBox.xmax = Math.max(coords.x, originalBox.xmin + 10);
+            newBox.ymin = Math.min(coords.y, originalBox.ymax - 10);
+            break;
+          case 'e':
+            newBox.xmax = Math.max(coords.x, originalBox.xmin + 10);
+            break;
+          case 'se':
+            newBox.xmax = Math.max(coords.x, originalBox.xmin + 10);
+            newBox.ymax = Math.max(coords.y, originalBox.ymin + 10);
+            break;
+          case 's':
+            newBox.ymax = Math.max(coords.y, originalBox.ymin + 10);
+            break;
+          case 'sw':
+            newBox.xmin = Math.min(coords.x, originalBox.xmax - 10);
+            newBox.ymax = Math.max(coords.y, originalBox.ymin + 10);
+            break;
+          case 'w':
+            newBox.xmin = Math.min(coords.x, originalBox.xmax - 10);
+            break;
+          case 'move':
+            if (startCoords) {
+              const dx = coords.x - startCoords.x;
+              const dy = coords.y - startCoords.y;
+              newBox.xmin = originalBox.xmin + dx;
+              newBox.xmax = originalBox.xmax + dx;
+              newBox.ymin = originalBox.ymin + dy;
+              newBox.ymax = originalBox.ymax + dy;
+            }
+            break;
+        }
+
+        setResizeState((prev) => (prev ? { ...prev, currentBox: newBox } : null));
+        return;
+      }
+
+      // Check for handle hover on hovered change
+      if (hoveredChangeId && !isDrawingMode && !isDrawing) {
+        const hoveredChange = changes.find((c) => c.id === hoveredChangeId);
+        if (hoveredChange) {
+          const handle = getHandleAtPosition(coords.x, coords.y, hoveredChange.location);
+          setHoveredHandle(handle);
+        }
+      } else {
+        setHoveredHandle(null);
+      }
+
+      // Handle drawing
+      if (!isDrawingMode || !isDrawing || !drawStartRef.current) return;
 
       onDrawingStateChange?.({
         startX: drawStartRef.current.x,
@@ -217,11 +394,19 @@ export function ImageViewer({
         currentY: coords.y,
       });
     },
-    [isDrawingMode, isDrawing, getImageCoordinates, onDrawingStateChange]
+    [isDrawingMode, isDrawing, getImageCoordinates, onDrawingStateChange, resizeState, hoveredChangeId, changes, getHandleAtPosition]
   );
 
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
+      // Commit resize
+      if (resizeState && onChangeLocationUpdate) {
+        onChangeLocationUpdate(resizeState.changeId, resizeState.currentBox);
+        setResizeState(null);
+        return;
+      }
+
+      // Handle drawing completion
       if (!isDrawingMode || !isDrawing || !drawStartRef.current) return;
 
       const coords = getImageCoordinates(e);
@@ -236,7 +421,6 @@ export function ImageViewer({
         ymax: Math.max(drawStartRef.current.y, coords.y),
       };
 
-      // Check minimum size (10px)
       if (box.xmax - box.xmin >= 10 && box.ymax - box.ymin >= 10) {
         onDrawComplete(box);
       }
@@ -244,8 +428,30 @@ export function ImageViewer({
       drawStartRef.current = null;
       onDrawingStateChange?.(null);
     },
-    [isDrawingMode, isDrawing, getImageCoordinates, onDrawComplete, onDrawingStateChange]
+    [isDrawingMode, isDrawing, getImageCoordinates, onDrawComplete, onDrawingStateChange, resizeState, onChangeLocationUpdate]
   );
+
+  const handleMouseLeave = useCallback(() => {
+    if (isDrawing) {
+      setIsDrawing(false);
+      drawStartRef.current = null;
+      onDrawingStateChange?.(null);
+    }
+    if (resizeState && onChangeLocationUpdate) {
+      // Commit resize on mouse leave
+      onChangeLocationUpdate(resizeState.changeId, resizeState.currentBox);
+      setResizeState(null);
+    }
+    setHoveredHandle(null);
+  }, [isDrawing, onDrawingStateChange, resizeState, onChangeLocationUpdate]);
+
+  // Determine cursor
+  const getCursor = () => {
+    if (isDrawingMode) return 'crosshair';
+    if (resizeState) return getCursorForHandle(resizeState.handle);
+    if (hoveredHandle) return getCursorForHandle(hoveredHandle);
+    return 'default';
+  };
 
   if (!imageData) {
     return (
@@ -262,8 +468,8 @@ export function ImageViewer({
     <div
       ref={containerRef}
       data-testid="image-viewer"
-      className={`relative inline-block ${isDrawingMode ? 'cursor-crosshair' : ''}`}
-      style={{ width: displayWidth, height: displayHeight, touchAction: 'none' }}
+      className="relative inline-block"
+      style={{ width: displayWidth, height: displayHeight, touchAction: 'none', cursor: getCursor() }}
     >
       <img
         src={imageData}
@@ -281,13 +487,7 @@ export function ImageViewer({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={() => {
-          if (isDrawing) {
-            setIsDrawing(false);
-            drawStartRef.current = null;
-            onDrawingStateChange?.(null);
-          }
-        }}
+        onMouseLeave={handleMouseLeave}
       />
     </div>
   );
@@ -316,7 +516,47 @@ function drawBoundingBox(
 
   ctx.strokeRect(x, y, w, h);
 
-  // Fill with transparent color
   ctx.fillStyle = color.replace(/[\d.]+\)$/, '0.15)');
   ctx.fillRect(x, y, w, h);
+}
+
+function drawResizeHandles(ctx: CanvasRenderingContext2D, box: BoundingBox, scale: number) {
+  const x = box.xmin * scale;
+  const y = box.ymin * scale;
+  const w = (box.xmax - box.xmin) * scale;
+  const h = (box.ymax - box.ymin) * scale;
+
+  const handleSize = HANDLE_SIZE;
+  const halfHandle = handleSize / 2;
+
+  ctx.fillStyle = 'white';
+  ctx.strokeStyle = 'rgba(59, 130, 246, 1)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([]);
+
+  // Corner handles
+  const corners = [
+    { x: x, y: y }, // nw
+    { x: x + w, y: y }, // ne
+    { x: x, y: y + h }, // sw
+    { x: x + w, y: y + h }, // se
+  ];
+
+  corners.forEach((corner) => {
+    ctx.fillRect(corner.x - halfHandle, corner.y - halfHandle, handleSize, handleSize);
+    ctx.strokeRect(corner.x - halfHandle, corner.y - halfHandle, handleSize, handleSize);
+  });
+
+  // Edge handles (midpoints)
+  const edges = [
+    { x: x + w / 2, y: y }, // n
+    { x: x + w / 2, y: y + h }, // s
+    { x: x, y: y + h / 2 }, // w
+    { x: x + w, y: y + h / 2 }, // e
+  ];
+
+  edges.forEach((edge) => {
+    ctx.fillRect(edge.x - halfHandle, edge.y - halfHandle, handleSize, handleSize);
+    ctx.strokeRect(edge.x - halfHandle, edge.y - halfHandle, handleSize, handleSize);
+  });
 }

@@ -64,7 +64,6 @@ export function ChangeList({
             data-change-id={change.id}
             title={tooltip}
             onMouseEnter={() => onHover(change.id)}
-            onMouseLeave={() => onHover(null)}
             onClick={() => onApprove(change.id)}
             className={`
               px-2 py-1.5 rounded border cursor-pointer transition-all
