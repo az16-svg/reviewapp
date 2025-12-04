@@ -31,18 +31,9 @@ export function ChangeList({
     );
   }
 
-  // Sort changes: top-to-bottom (y-axis priority), then left-to-right (x-axis)
-  const sortedChanges = [...changes].sort((a, b) => {
-    // Primary: sort by ymin (top to bottom)
-    const yDiff = a.location.ymin - b.location.ymin;
-    if (Math.abs(yDiff) > 50) return yDiff; // Use threshold to group similar y positions
-    // Secondary: sort by xmin (left to right)
-    return a.location.xmin - b.location.xmin;
-  });
-
   return (
     <div className="flex flex-col gap-2 p-2">
-      {sortedChanges.map((change) => {
+      {changes.map((change, index) => {
         const isApproved = change.approved ?? false;
         const isHovered = hoveredChangeId === change.id;
 
@@ -89,6 +80,7 @@ export function ChangeList({
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-gray-400">{index + 1}</span>
                   <span className="font-medium text-gray-900">{change.action}</span>
                   <span className="text-gray-400">-</span>
                   <span className="text-gray-600 truncate">{change.elements.join(', ')}</span>

@@ -142,7 +142,15 @@ export default function Home() {
       previousImage: ImageData | null,
       newImage: ImageData | null
     ) => {
-      const changes = jsonData ? jsonData.changes.map(rawChangeToChange) : [];
+      const rawChanges = jsonData ? jsonData.changes.map(rawChangeToChange) : [];
+      // Sort changes only on initial load: top-to-bottom (y-axis priority), then left-to-right (x-axis)
+      const changes = [...rawChanges].sort((a, b) => {
+        // Primary: sort by ymin (top to bottom)
+        const yDiff = a.location.ymin - b.location.ymin;
+        if (Math.abs(yDiff) > 50) return yDiff; // Use threshold to group similar y positions
+        // Secondary: sort by xmin (left to right)
+        return a.location.xmin - b.location.xmin;
+      });
       addPage({
         id: generateId(),
         name: imageName,
