@@ -8,7 +8,7 @@ import { ChangeEditor } from '@/components/ChangeEditor';
 import { ExportButton } from '@/components/ExportButton';
 import { PageTabs } from '@/components/PageTabs';
 import { usePages } from '@/hooks/usePages';
-import type { AnalysisResult, Change, BoundingBox, DrawingState } from '@/types/change';
+import type { AnalysisResult, Change, BoundingBox, DrawingState, ImageData, ViewMode, BeforeAfterImage } from '@/types/change';
 import { rawChangeToChange, generateId, changeToRawChange } from '@/types/change';
 
 export default function Home() {
@@ -22,13 +22,25 @@ export default function Home() {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [showChangeTooltips, setShowChangeTooltips] = useState(false);
   const [undoStack, setUndoStack] = useState<Array<{ pageId: string; changes: Change[] }>>([]);
+  const [viewMode, setViewMode] = useState<ViewMode>('overlay');
+  const [beforeAfterImage, setBeforeAfterImage] = useState<BeforeAfterImage>('previous');
   const imageViewerContainerRef = useRef<HTMLDivElement>(null);
+
+  // Check if before/after mode is available (both previous and new images exist)
+  const canUseBeforeAfter = currentPage?.previousImage && currentPage?.newImage;
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't handle shortcuts when editing or adding new change
       if (editingChangeId || pendingNewChange) return;
+
+      // Spacebar to toggle between previous/new in before/after mode
+      if (e.key === ' ' && viewMode === 'before-after' && canUseBeforeAfter) {
+        e.preventDefault();
+        setBeforeAfterImage((prev) => (prev === 'previous' ? 'new' : 'previous'));
+        return;
+      }
 
       // Escape to cancel drawing mode
       if (e.key === 'Escape') {
@@ -105,7 +117,7 @@ export default function Home() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isDrawingMode, editingChangeId, pendingNewChange, currentPage, hoveredChangeId, updatePageChanges]);
+  }, [isDrawingMode, editingChangeId, pendingNewChange, currentPage, hoveredChangeId, updatePageChanges, viewMode, canUseBeforeAfter]);
 
   const handleUndo = useCallback(() => {
     if (undoStack.length === 0) return;
@@ -117,22 +129,26 @@ export default function Home() {
 
   const handleUpload = useCallback(
     (
-      jsonData: AnalysisResult,
-      imageData: string,
+      jsonData: AnalysisResult | null,
+      overlayImage: ImageData,
       imageName: string,
-      imageWidth: number,
-      imageHeight: number
+      previousImage: ImageData | null,
+      newImage: ImageData | null
     ) => {
-      const changes = jsonData.changes.map(rawChangeToChange);
+      const changes = jsonData ? jsonData.changes.map(rawChangeToChange) : [];
       addPage({
         id: generateId(),
         name: imageName,
-        imageData,
-        imageWidth,
-        imageHeight,
+        imageData: overlayImage.data,
+        imageWidth: overlayImage.width,
+        imageHeight: overlayImage.height,
+        previousImage: previousImage || undefined,
+        newImage: newImage || undefined,
         changes,
         createdAt: new Date(),
       });
+      // Reset view mode when adding a new page
+      setViewMode('overlay');
     },
     [addPage]
   );
@@ -297,6 +313,7 @@ export default function Home() {
     (index: number) => {
       setCurrentPage(index);
       setHoveredChangeId(null);
+      setViewMode('overlay'); // Reset to overlay when switching pages
     },
     [setCurrentPage]
   );
@@ -506,6 +523,65 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                   </svg>
                 </button>
+
+                {/* Before/After Image Toggle - only show in before-after mode */}
+                {viewMode === 'before-after' && canUseBeforeAfter && (
+                  <>
+                    <div className="w-px h-6 bg-gray-300 mx-2" />
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setBeforeAfterImage('previous')}
+                        className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                          beforeAfterImage === 'previous'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => setBeforeAfterImage('new')}
+                        className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                          beforeAfterImage === 'new'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        New
+                      </button>
+                      <span className="text-xs text-gray-500 ml-1">(Space)</span>
+                    </div>
+                  </>
+                )}
+
+                {/* View Mode Toggle - only show if before/after images are available */}
+                {canUseBeforeAfter && (
+                  <>
+                    <div className="w-px h-6 bg-gray-300 mx-2" />
+                    <div className="flex items-center gap-1 bg-gray-100 rounded-md p-0.5">
+                      <button
+                        onClick={() => setViewMode('overlay')}
+                        className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                          viewMode === 'overlay'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        Overlay
+                      </button>
+                      <button
+                        onClick={() => setViewMode('before-after')}
+                        className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                          viewMode === 'before-after'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        Before/After
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -518,21 +594,39 @@ export default function Home() {
 
           {/* Image viewer with scroll */}
           <div ref={imageViewerContainerRef} className="flex-1 overflow-auto p-4">
-            {currentPage ? (
-              <ImageViewer
-                imageData={currentPage.imageData}
-                imageWidth={currentPage.imageWidth}
-                imageHeight={currentPage.imageHeight}
-                changes={currentPage.changes}
-                hoveredChangeId={hoveredChangeId}
-                isDrawingMode={isDrawingMode}
-                drawingState={drawingState}
-                onDrawComplete={handleDrawComplete}
-                onDrawingStateChange={setDrawingState}
-                zoomLevel={zoomLevel}
-                onZoomChange={setZoomLevel}
-              />
-            ) : (
+            {currentPage ? (() => {
+              // Determine which image to show based on view mode
+              let displayImage = {
+                data: currentPage.imageData,
+                width: currentPage.imageWidth,
+                height: currentPage.imageHeight,
+              };
+
+              if (viewMode === 'before-after' && canUseBeforeAfter) {
+                const selectedImage = beforeAfterImage === 'previous'
+                  ? currentPage.previousImage
+                  : currentPage.newImage;
+                if (selectedImage) {
+                  displayImage = selectedImage;
+                }
+              }
+
+              return (
+                <ImageViewer
+                  imageData={displayImage.data}
+                  imageWidth={displayImage.width}
+                  imageHeight={displayImage.height}
+                  changes={currentPage.changes}
+                  hoveredChangeId={hoveredChangeId}
+                  isDrawingMode={isDrawingMode}
+                  drawingState={drawingState}
+                  onDrawComplete={handleDrawComplete}
+                  onDrawingStateChange={setDrawingState}
+                  zoomLevel={zoomLevel}
+                  onZoomChange={setZoomLevel}
+                />
+              );
+            })() : (
               <div className="flex items-center justify-center h-full">
                 <button
                   onClick={() => setIsUploadModalOpen(true)}
@@ -570,8 +664,8 @@ export default function Home() {
       {/* Upload Modal */}
       {isUploadModalOpen && (
         <UploadModal
-          onUpload={(jsonData, imageData, imageName, imageWidth, imageHeight) => {
-            handleUpload(jsonData, imageData, imageName, imageWidth, imageHeight);
+          onUpload={(jsonData, overlayImage, imageName, previousImage, newImage) => {
+            handleUpload(jsonData, overlayImage, imageName, previousImage, newImage);
             setIsUploadModalOpen(false);
           }}
           onClose={() => setIsUploadModalOpen(false)}

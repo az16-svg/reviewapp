@@ -2,15 +2,15 @@
 
 import { useEffect } from 'react';
 import { UploadForm } from './UploadForm';
-import type { AnalysisResult } from '@/types/change';
+import type { AnalysisResult, ImageData } from '@/types/change';
 
 interface UploadModalProps {
   onUpload: (
-    jsonData: AnalysisResult,
-    imageData: string,
+    jsonData: AnalysisResult | null,
+    overlayImage: ImageData,
     imageName: string,
-    imageWidth: number,
-    imageHeight: number
+    previousImage: ImageData | null,
+    newImage: ImageData | null
   ) => void;
   onClose: () => void;
 }
@@ -35,13 +35,13 @@ export function UploadModal({ onUpload, onClose }: UploadModalProps) {
   };
 
   const handleUpload = (
-    jsonData: AnalysisResult,
-    imageData: string,
+    jsonData: AnalysisResult | null,
+    overlayImage: ImageData,
     imageName: string,
-    imageWidth: number,
-    imageHeight: number
+    previousImage: ImageData | null,
+    newImage: ImageData | null
   ) => {
-    onUpload(jsonData, imageData, imageName, imageWidth, imageHeight);
+    onUpload(jsonData, overlayImage, imageName, previousImage, newImage);
     onClose();
   };
 
@@ -51,10 +51,10 @@ export function UploadModal({ onUpload, onClose }: UploadModalProps) {
       onClick={handleBackdropClick}
     >
       <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4"
+        className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 border-b flex items-center justify-between">
+        <div className="p-4 border-b flex items-center justify-between sticky top-0 bg-white">
           <h2 className="text-lg font-semibold text-gray-900">Add New Page</h2>
           <button
             onClick={onClose}

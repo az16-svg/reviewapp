@@ -22,12 +22,25 @@ export interface Change {
   approved: boolean;
 }
 
+export interface ImageData {
+  data: string;
+  width: number;
+  height: number;
+}
+
+export type ViewMode = 'overlay' | 'before-after';
+export type BeforeAfterImage = 'previous' | 'new';
+
 export interface Page {
   id: string;
   name: string;
+  // Primary overlay image (required)
   imageData: string;
   imageWidth: number;
   imageHeight: number;
+  // Optional before/after images
+  previousImage?: ImageData;
+  newImage?: ImageData;
   changes: Change[];
   createdAt: Date;
 }
