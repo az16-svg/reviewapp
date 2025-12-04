@@ -349,12 +349,12 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${currentPage.name.replace(/\.[^/.]+$/, '')}_changes.json`;
+    a.download = `page_${currentPageIndex + 1}_changes.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [currentPage]);
+  }, [currentPage, currentPageIndex]);
 
   return (
     <main className="h-screen flex flex-col overflow-hidden">
@@ -471,7 +471,7 @@ export default function Home() {
           {/* Toolbar */}
           <div className="flex-shrink-0 px-4 py-2 bg-white border-b flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <h2 className="font-medium text-gray-900">{currentPage?.name ?? 'No page selected'}</h2>
+              <h2 className="font-medium text-gray-900">{currentPage ? `Page ${currentPageIndex + 1}` : 'No page selected'}</h2>
               {currentPage && (
                 <span className="text-sm text-gray-500">
                   {currentPage.imageWidth} × {currentPage.imageHeight}

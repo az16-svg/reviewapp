@@ -38,7 +38,7 @@ export function PageTabs({
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}
                 `}
               >
-                {page.name}
+                Page {index + 1}
               </button>
 
               <button
@@ -55,7 +55,7 @@ export function PageTabs({
                     ? 'bg-red-500 text-white hover:bg-red-600'
                     : 'bg-gray-400 text-white hover:bg-red-500'}
                 `}
-                aria-label={`Delete ${page.name}`}
+                aria-label={`Delete Page ${index + 1}`}
               >
                 ×
               </button>
