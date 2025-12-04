@@ -42,6 +42,13 @@ export default function Home() {
         return;
       }
 
+      // 'B' key to toggle between Overlay and Before/After modes
+      if ((e.key === 'b' || e.key === 'B') && canUseBeforeAfter) {
+        e.preventDefault();
+        setViewMode((prev) => (prev === 'overlay' ? 'before-after' : 'overlay'));
+        return;
+      }
+
       // Escape to cancel drawing mode
       if (e.key === 'Escape') {
         if (isDrawingMode) {
@@ -528,27 +535,29 @@ export default function Home() {
                 {viewMode === 'before-after' && canUseBeforeAfter && (
                   <>
                     <div className="w-px h-6 bg-gray-300 mx-2" />
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setBeforeAfterImage('previous')}
-                        className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                          beforeAfterImage === 'previous'
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                        }`}
-                      >
-                        Previous
-                      </button>
-                      <button
-                        onClick={() => setBeforeAfterImage('new')}
-                        className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                          beforeAfterImage === 'new'
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                        }`}
-                      >
-                        New
-                      </button>
+                    <div className="flex items-center">
+                      <div className="flex items-center gap-0.5 bg-gray-200 rounded p-0.5">
+                        <button
+                          onClick={() => setBeforeAfterImage('previous')}
+                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                            beforeAfterImage === 'previous'
+                              ? 'bg-blue-600 text-white'
+                              : 'text-gray-700 hover:bg-gray-300'
+                          }`}
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => setBeforeAfterImage('new')}
+                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                            beforeAfterImage === 'new'
+                              ? 'bg-blue-600 text-white'
+                              : 'text-gray-700 hover:bg-gray-300'
+                          }`}
+                        >
+                          New
+                        </button>
+                      </div>
                       <span className="text-xs text-gray-500 ml-1">(Space)</span>
                     </div>
                   </>
@@ -558,27 +567,30 @@ export default function Home() {
                 {canUseBeforeAfter && (
                   <>
                     <div className="w-px h-6 bg-gray-300 mx-2" />
-                    <div className="flex items-center gap-1 bg-gray-100 rounded-md p-0.5">
-                      <button
-                        onClick={() => setViewMode('overlay')}
-                        className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                          viewMode === 'overlay'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                      >
-                        Overlay
-                      </button>
-                      <button
-                        onClick={() => setViewMode('before-after')}
-                        className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                          viewMode === 'before-after'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-900'
-                        }`}
-                      >
-                        Before/After
-                      </button>
+                    <div className="flex items-center">
+                      <div className="flex items-center gap-0.5 bg-gray-200 rounded p-0.5">
+                        <button
+                          onClick={() => setViewMode('overlay')}
+                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                            viewMode === 'overlay'
+                              ? 'bg-blue-600 text-white'
+                              : 'text-gray-700 hover:bg-gray-300'
+                          }`}
+                        >
+                          Overlay
+                        </button>
+                        <button
+                          onClick={() => setViewMode('before-after')}
+                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                            viewMode === 'before-after'
+                              ? 'bg-blue-600 text-white'
+                              : 'text-gray-700 hover:bg-gray-300'
+                          }`}
+                        >
+                          Before/After
+                        </button>
+                      </div>
+                      <span className="text-xs text-gray-500 ml-1">(B)</span>
                     </div>
                   </>
                 )}
