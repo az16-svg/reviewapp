@@ -88,7 +88,7 @@ export function ChangeList({
               </div>
 
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 text-sm">
+                <div className="flex items-center gap-1.5 text-xs">
                   <span className="font-medium text-gray-900">{change.action}</span>
                   <span className="text-gray-400">-</span>
                   <span className="text-gray-600 truncate">{change.elements.join(', ')}</span>
@@ -98,8 +98,11 @@ export function ChangeList({
                     </span>
                   )}
                 </div>
+                {change.description && (
+                  <p className="text-[11px] text-gray-500 line-clamp-3">{change.description}</p>
+                )}
                 {(change.fromValue || change.toValue) && (
-                  <p className="text-xs text-gray-500 ml-0">
+                  <p className="text-xs text-gray-500">
                     {change.fromValue && change.toValue
                       ? `${change.fromValue} → ${change.toValue}`
                       : change.fromValue || change.toValue}
