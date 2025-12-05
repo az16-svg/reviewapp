@@ -114,10 +114,10 @@ export function ChangeEditor({ change, onSave, onCancel }: ChangeEditorProps) {
         onClick={onCancel}
       />
 
-      {/* Side Panel - slides in from right, contained within image viewer */}
+      {/* Side Panel - slides in from left, contained within image viewer */}
       <div
         data-testid="editor-panel"
-        className="absolute top-0 right-0 h-full w-96 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col border-l"
+        className="absolute top-0 left-0 h-full w-96 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col border-r animate-slide-in-left"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
