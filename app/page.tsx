@@ -490,7 +490,7 @@ export default function Home() {
         </div>
 
         {/* Right side: Image viewer (takes remaining space) */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-gray-100">
+        <div className="flex-1 flex flex-col overflow-hidden bg-gray-100 relative">
           {/* Toolbar */}
           <div className="flex-shrink-0 px-4 py-2 bg-white border-b flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -673,29 +673,29 @@ export default function Home() {
               </div>
             )}
           </div>
+
+          {/* Change Editor Side Panel - for editing existing changes */}
+          {editingChangeId && currentPage && (() => {
+            const editingChange = currentPage.changes.find((c) => c.id === editingChangeId);
+            return editingChange ? (
+              <ChangeEditor
+                change={editingChange}
+                onSave={handleSaveEdit}
+                onCancel={handleCancelEdit}
+              />
+            ) : null;
+          })()}
+
+          {/* Change Editor Side Panel - for adding new changes */}
+          {pendingNewChange && (
+            <ChangeEditor
+              change={pendingNewChange}
+              onSave={handleSaveNewChange}
+              onCancel={handleCancelNewChange}
+            />
+          )}
         </div>
       </div>
-
-      {/* Change Editor Modal - for editing existing changes */}
-      {editingChangeId && currentPage && (() => {
-        const editingChange = currentPage.changes.find((c) => c.id === editingChangeId);
-        return editingChange ? (
-          <ChangeEditor
-            change={editingChange}
-            onSave={handleSaveEdit}
-            onCancel={handleCancelEdit}
-          />
-        ) : null;
-      })()}
-
-      {/* Change Editor Modal - for adding new changes */}
-      {pendingNewChange && (
-        <ChangeEditor
-          change={pendingNewChange}
-          onSave={handleSaveNewChange}
-          onCancel={handleCancelNewChange}
-        />
-      )}
 
       {/* Upload Modal */}
       {isUploadModalOpen && (

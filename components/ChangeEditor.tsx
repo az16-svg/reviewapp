@@ -105,28 +105,38 @@ export function ChangeEditor({ change, onSave, onCancel }: ChangeEditorProps) {
     });
   };
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onCancel();
-    }
-  };
-
   return (
-    <div
-      data-testid="editor-backdrop"
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      onClick={handleBackdropClick}
-    >
+    <>
+      {/* Backdrop - very light, click to close */}
       <div
-        data-testid="editor-modal"
-        className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4"
+        data-testid="editor-backdrop"
+        className="absolute inset-0 bg-black/10 z-40 transition-opacity duration-300"
+        onClick={onCancel}
+      />
+
+      {/* Side Panel - slides in from right, contained within image viewer */}
+      <div
+        data-testid="editor-panel"
+        className="absolute top-0 right-0 h-full w-96 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out flex flex-col border-l"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-4 border-b">
+        {/* Header */}
+        <div className="p-4 border-b flex items-center justify-between shrink-0">
           <h2 className="text-lg font-semibold text-gray-900">Edit Change</h2>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100"
+            aria-label="Close panel"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
-        <div className="p-4 space-y-4">
+        {/* Scrollable Form Content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* Action dropdown */}
           <div>
             <label htmlFor="action" className="block text-sm font-medium text-gray-700 mb-1">
@@ -234,7 +244,8 @@ export function ChangeEditor({ change, onSave, onCancel }: ChangeEditorProps) {
           </div>
         </div>
 
-        <div className="p-4 border-t flex justify-end gap-3">
+        {/* Footer - fixed at bottom */}
+        <div className="p-4 border-t flex justify-end gap-3 shrink-0 bg-white">
           <button
             type="button"
             onClick={onCancel}
@@ -251,6 +262,6 @@ export function ChangeEditor({ change, onSave, onCancel }: ChangeEditorProps) {
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 }
