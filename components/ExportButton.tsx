@@ -116,10 +116,10 @@ export function ExportButton({ pages, disabled = false }: ExportButtonProps) {
 
         {/* Dropdown menu */}
         {isDropdownOpen && (
-          <div className="absolute right-0 top-full mt-1 w-48 bg-green-600 rounded-md shadow-lg z-50 overflow-hidden">
+          <div className="absolute right-0 top-full mt-1 w-40 bg-green-600 rounded-md shadow-lg z-50 overflow-hidden">
             <button
               onClick={() => handleExport(true)}
-              className="w-full px-4 py-2 text-left text-sm font-medium text-white hover:bg-green-700"
+              className="w-full px-3 py-2 text-left text-sm font-medium text-white hover:bg-green-700"
             >
               Export with Boxes
             </button>
