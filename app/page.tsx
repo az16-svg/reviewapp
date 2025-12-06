@@ -14,6 +14,7 @@ import { rawChangeToChange, generateId, changeToRawChange } from '@/types/change
 export default function Home() {
   const { pages, currentPage, currentPageIndex, addPage, deletePage, setCurrentPage, updatePageChanges } = usePages();
   const [hoveredChangeId, setHoveredChangeId] = useState<string | null>(null);
+  const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
   const [drawingState, setDrawingState] = useState<DrawingState | null>(null);
   const [editingChangeId, setEditingChangeId] = useState<string | null>(null);
@@ -170,6 +171,16 @@ export default function Home() {
 
   const handleHover = useCallback((changeId: string | null) => {
     setHoveredChangeId(changeId);
+  }, []);
+
+  const handleBoxClick = useCallback((changeId: string) => {
+    // Set both selected and hovered for visual consistency
+    setSelectedChangeId(changeId);
+    setHoveredChangeId(changeId);
+    // Clear selection after a short delay to allow the highlight animation
+    setTimeout(() => {
+      setSelectedChangeId(null);
+    }, 1500);
   }, []);
 
   const handleApprove = useCallback(
@@ -335,6 +346,7 @@ export default function Home() {
     (pageId: string) => {
       deletePage(pageId);
       setHoveredChangeId(null);
+      setSelectedChangeId(null);
     },
     [deletePage]
   );
@@ -343,6 +355,7 @@ export default function Home() {
     (index: number) => {
       setCurrentPage(index);
       setHoveredChangeId(null);
+      setSelectedChangeId(null);
       setViewMode('overlay'); // Reset to overlay when switching pages
     },
     [setCurrentPage]
@@ -474,6 +487,7 @@ export default function Home() {
               <ChangeList
                 changes={currentPage.changes}
                 hoveredChangeId={hoveredChangeId}
+                selectedChangeId={selectedChangeId}
                 showTooltips={showChangeTooltips}
                 onHover={handleHover}
                 onApprove={handleApprove}
@@ -658,6 +672,7 @@ export default function Home() {
                   onDrawComplete={handleDrawComplete}
                   onDrawingStateChange={setDrawingState}
                   onChangeLocationUpdate={handleChangeLocationUpdate}
+                  onBoxClick={handleBoxClick}
                   zoomLevel={zoomLevel}
                   onZoomChange={setZoomLevel}
                 />

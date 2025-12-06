@@ -33,13 +33,19 @@ function drawPdfBoundingBox(
   pdf.rect(x, y, w, h, 'S');
 }
 
+interface PdfExportOptions {
+  drawBoundingBoxes?: boolean;
+  onProgress?: (current: number, total: number) => void;
+}
+
 /**
- * Generates a PDF blob from pages with bounding boxes rendered as vectors
+ * Generates a PDF blob from pages with optional bounding boxes rendered as vectors
  */
 export async function generatePdfBlob(
   pages: Page[],
-  onProgress?: (current: number, total: number) => void
+  options: PdfExportOptions = {}
 ): Promise<Blob> {
+  const { drawBoundingBoxes = false, onProgress } = options;
   if (pages.length === 0) {
     throw new Error('No pages to export');
   }
@@ -87,13 +93,15 @@ export async function generatePdfBlob(
     const format = getImageFormat(page.imageData);
     pdf.addImage(page.imageData, format, offsetX, offsetY, renderWidth, renderHeight, undefined, 'FAST');
 
-    // Draw bounding boxes as vector graphics
-    const scaleX = renderWidth / page.imageWidth;
-    const scaleY = renderHeight / page.imageHeight;
+    // Draw bounding boxes as vector graphics (if enabled)
+    if (drawBoundingBoxes) {
+      const scaleX = renderWidth / page.imageWidth;
+      const scaleY = renderHeight / page.imageHeight;
 
-    page.changes.forEach((change) => {
-      drawPdfBoundingBox(pdf, change.location, scaleX, scaleY, offsetX, offsetY);
-    });
+      page.changes.forEach((change) => {
+        drawPdfBoundingBox(pdf, change.location, scaleX, scaleY, offsetX, offsetY);
+      });
+    }
   }
 
   return pdf.output('blob');
@@ -119,8 +127,8 @@ export function downloadBlob(blob: Blob, filename: string) {
 export async function exportToPdf(
   pages: Page[],
   filename: string = 'change-review-export.pdf',
-  onProgress?: (current: number, total: number) => void
+  options: PdfExportOptions = {}
 ): Promise<void> {
-  const blob = await generatePdfBlob(pages, onProgress);
+  const blob = await generatePdfBlob(pages, options);
   downloadBlob(blob, filename);
 }

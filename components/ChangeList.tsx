@@ -1,10 +1,12 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import type { Change } from '@/types/change';
 
 interface ChangeListProps {
   changes: Change[];
   hoveredChangeId: string | null;
+  selectedChangeId?: string | null;
   showTooltips?: boolean;
   onHover: (changeId: string | null) => void;
   onApprove: (changeId: string) => void;
@@ -16,6 +18,7 @@ interface ChangeListProps {
 export function ChangeList({
   changes,
   hoveredChangeId,
+  selectedChangeId,
   showTooltips = false,
   onHover,
   onApprove,
@@ -23,6 +26,21 @@ export function ChangeList({
   onDelete,
   onCenter,
 }: ChangeListProps) {
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Scroll to selected change when it changes
+  useEffect(() => {
+    if (selectedChangeId) {
+      const cardElement = cardRefs.current.get(selectedChangeId);
+      if (cardElement) {
+        cardElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      }
+    }
+  }, [selectedChangeId]);
+
   if (changes.length === 0) {
     return (
       <div className="flex items-center justify-center h-full p-4 text-gray-500">
@@ -36,6 +54,7 @@ export function ChangeList({
       {changes.map((change, index) => {
         const isApproved = change.approved ?? false;
         const isHovered = hoveredChangeId === change.id;
+        const isSelected = selectedChangeId === change.id;
 
         // Build tooltip with full metadata (only if enabled)
         const tooltip = showTooltips ? [
@@ -52,14 +71,23 @@ export function ChangeList({
         return (
           <div
             key={change.id}
+            ref={(el) => {
+              if (el) {
+                cardRefs.current.set(change.id, el);
+              } else {
+                cardRefs.current.delete(change.id);
+              }
+            }}
             data-change-id={change.id}
             title={tooltip}
             onMouseEnter={() => onHover(change.id)}
             onClick={() => onApprove(change.id)}
             className={`
               px-2 py-1.5 rounded border cursor-pointer transition-all
-              ${isApproved ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'}
-              ${isHovered && !isApproved ? 'bg-orange-50 border-orange-300' : ''}
+              ${isSelected ? 'ring-2 ring-orange-500 border-orange-500 bg-orange-100' : ''}
+              ${!isSelected && isApproved ? 'border-blue-400 bg-blue-50' : ''}
+              ${!isSelected && !isApproved && isHovered ? 'bg-orange-50 border-orange-300' : ''}
+              ${!isSelected && !isApproved && !isHovered ? 'border-gray-200 bg-white' : ''}
               hover:shadow-sm
             `}
           >

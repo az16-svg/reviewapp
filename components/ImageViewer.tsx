@@ -25,6 +25,7 @@ interface ImageViewerProps {
   onDrawComplete: (box: BoundingBox) => void;
   onDrawingStateChange?: (state: DrawingState | null) => void;
   onChangeLocationUpdate?: (changeId: string, newLocation: BoundingBox) => void;
+  onBoxClick?: (changeId: string) => void;
   zoomLevel?: number;
   onZoomChange?: (zoom: number) => void;
 }
@@ -83,6 +84,7 @@ export function ImageViewer({
   onDrawComplete,
   onDrawingStateChange,
   onChangeLocationUpdate,
+  onBoxClick,
   zoomLevel = 1,
   onZoomChange,
 }: ImageViewerProps) {
@@ -93,6 +95,7 @@ export function ImageViewer({
   const [hoveredHandle, setHoveredHandle] = useState<ResizeHandle>(null);
   const drawStartRef = useRef<{ x: number; y: number } | null>(null);
   const lastPinchDistanceRef = useRef<number | null>(null);
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
 
   const displayWidth = imageWidth * zoomLevel;
   const displayHeight = imageHeight * zoomLevel;
@@ -107,6 +110,22 @@ export function ImageViewer({
       return change.location;
     },
     [resizeState]
+  );
+
+  // Find which change's bounding box contains a point
+  const getChangeAtPosition = useCallback(
+    (x: number, y: number): Change | null => {
+      // Check in reverse order to get topmost (last drawn) first
+      for (let i = changes.length - 1; i >= 0; i--) {
+        const change = changes[i];
+        const { xmin, ymin, xmax, ymax } = change.location;
+        if (x >= xmin && x <= xmax && y >= ymin && y <= ymax) {
+          return change;
+        }
+      }
+      return null;
+    },
+    [changes]
   );
 
   // Detect which resize handle is at a given position
@@ -283,6 +302,9 @@ export function ImageViewer({
       const coords = getImageCoordinates(e);
       if (!coords) return;
 
+      // Track mouse down position for click detection
+      mouseDownPosRef.current = coords;
+
       // Check for resize handle or move on hovered change
       if (hoveredChangeId && !isDrawingMode && onChangeLocationUpdate) {
         const hoveredChange = changes.find((c) => c.id === hoveredChangeId);
@@ -399,18 +421,44 @@ export function ImageViewer({
 
   const handleMouseUp = useCallback(
     (e: React.MouseEvent) => {
+      const coords = getImageCoordinates(e);
+      const clickThreshold = 5; // pixels - if mouse moved less than this, it's a click
+
+      // Check if this was a click (minimal movement)
+      const wasClick =
+        coords &&
+        mouseDownPosRef.current &&
+        Math.abs(coords.x - mouseDownPosRef.current.x) < clickThreshold &&
+        Math.abs(coords.y - mouseDownPosRef.current.y) < clickThreshold;
+
       // Commit resize
       if (resizeState && onChangeLocationUpdate) {
         onChangeLocationUpdate(resizeState.changeId, resizeState.currentBox);
         setResizeState(null);
+        mouseDownPosRef.current = null;
         return;
       }
 
-      // Handle drawing completion
-      if (!isDrawingMode || !isDrawing || !drawStartRef.current) return;
+      // Handle click on bounding box (only when not in drawing mode)
+      if (wasClick && !isDrawingMode && coords && onBoxClick) {
+        const clickedChange = getChangeAtPosition(coords.x, coords.y);
+        if (clickedChange) {
+          onBoxClick(clickedChange.id);
+          mouseDownPosRef.current = null;
+          return;
+        }
+      }
 
-      const coords = getImageCoordinates(e);
-      if (!coords) return;
+      // Handle drawing completion
+      if (!isDrawingMode || !isDrawing || !drawStartRef.current) {
+        mouseDownPosRef.current = null;
+        return;
+      }
+
+      if (!coords) {
+        mouseDownPosRef.current = null;
+        return;
+      }
 
       setIsDrawing(false);
 
@@ -426,9 +474,10 @@ export function ImageViewer({
       }
 
       drawStartRef.current = null;
+      mouseDownPosRef.current = null;
       onDrawingStateChange?.(null);
     },
-    [isDrawingMode, isDrawing, getImageCoordinates, onDrawComplete, onDrawingStateChange, resizeState, onChangeLocationUpdate]
+    [isDrawingMode, isDrawing, getImageCoordinates, onDrawComplete, onDrawingStateChange, resizeState, onChangeLocationUpdate, onBoxClick, getChangeAtPosition]
   );
 
   const handleMouseLeave = useCallback(() => {
