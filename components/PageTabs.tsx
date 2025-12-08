@@ -1,6 +1,7 @@
 'use client';
 
 import type { Page } from '@/types/change';
+import { styles } from '@/lib/theme';
 
 interface PageTabsProps {
   pages: Page[];
@@ -34,8 +35,8 @@ export function PageTabs({
                 className={`
                   px-4 py-2 rounded-md text-sm font-medium transition-colors
                   ${isActive
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}
+                    ? styles.pageTabActive
+                    : styles.pageTabInactive}
                 `}
               >
                 Page {index + 1}
@@ -65,7 +66,7 @@ export function PageTabs({
 
         <button
           onClick={onAddPage}
-          className="w-9 h-9 rounded-md bg-green-600 text-white hover:bg-green-700 flex items-center justify-center text-xl font-medium transition-colors"
+          className={`w-9 h-9 rounded-md flex items-center justify-center text-xl font-medium transition-colors ${styles.buttonPrimary}`}
           title="Add page"
         >
           +

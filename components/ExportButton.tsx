@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { exportToPdf } from '@/lib/pdfExport';
+import { styles, theme } from '@/lib/theme';
 import type { Page } from '@/types/change';
 
 interface ExportButtonProps {
@@ -67,7 +68,7 @@ export function ExportButton({ pages, disabled = false }: ExportButtonProps) {
             transition-colors
             ${isDisabled
               ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-              : 'bg-green-600 text-white hover:bg-green-700'}
+              : styles.buttonPrimary}
           `}
         >
           {isExporting ? (
@@ -102,11 +103,11 @@ export function ExportButton({ pages, disabled = false }: ExportButtonProps) {
           onClick={() => setIsDropdownOpen(!isDropdownOpen)}
           disabled={isDisabled}
           className={`
-            px-2 py-2 rounded-r-md text-sm font-medium border-l border-green-700
+            px-2 py-2 rounded-r-md text-sm font-medium border-l ${theme.accent.border600}
             transition-colors
             ${isDisabled
               ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-              : 'bg-green-600 text-white hover:bg-green-700'}
+              : styles.buttonPrimary}
           `}
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -116,10 +117,10 @@ export function ExportButton({ pages, disabled = false }: ExportButtonProps) {
 
         {/* Dropdown menu */}
         {isDropdownOpen && (
-          <div className="absolute right-0 top-full mt-1 w-40 bg-green-600 rounded-md shadow-lg z-50 overflow-hidden">
+          <div className={`absolute right-0 top-full mt-1 w-40 ${theme.accent.bg500} rounded-md shadow-lg z-50 overflow-hidden`}>
             <button
               onClick={() => handleExport(true)}
-              className="w-full px-3 py-2 text-left text-sm font-medium text-white hover:bg-green-700"
+              className={`w-full px-3 py-2 text-left text-sm font-medium text-white ${theme.accent.hoverBg600}`}
             >
               Export with Boxes
             </button>

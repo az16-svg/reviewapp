@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { styles } from '@/lib/theme';
 
 interface Toast {
   id: string;
@@ -55,8 +56,8 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
   const bgColor = {
     error: 'bg-red-600',
     warning: 'bg-amber-500',
-    success: 'bg-green-600',
-    info: 'bg-blue-600',
+    success: styles.toastSuccess,
+    info: styles.toastInfo,
   }[toast.type];
 
   return (

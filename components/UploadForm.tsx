@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { parseAnalysisJson } from '@/lib/validation';
 import { useToast } from './Toast';
+import { styles, theme } from '@/lib/theme';
 import type { AnalysisResult, ImageData, SheetsData } from '@/types/change';
 
 interface UploadFormProps {
@@ -499,8 +500,8 @@ export function UploadForm({ onUpload, disabled = false }: UploadFormProps) {
           onClick={() => handleTabChange('multi')}
           className={`flex-1 py-2 text-sm font-medium transition-colors ${
             activeTab === 'multi'
-              ? 'text-blue-600 border-b-2 border-blue-600'
-              : 'text-gray-500 hover:text-gray-700'
+              ? styles.tabActive
+              : styles.tabInactive
           }`}
         >
           Multi-File Upload
@@ -509,8 +510,8 @@ export function UploadForm({ onUpload, disabled = false }: UploadFormProps) {
           onClick={() => handleTabChange('individual')}
           className={`flex-1 py-2 text-sm font-medium transition-colors ${
             activeTab === 'individual'
-              ? 'text-blue-600 border-b-2 border-blue-600'
-              : 'text-gray-500 hover:text-gray-700'
+              ? styles.tabActive
+              : styles.tabInactive
           }`}
         >
           Individual Upload
@@ -540,38 +541,38 @@ export function UploadForm({ onUpload, disabled = false }: UploadFormProps) {
             <p className="text-xs font-medium text-gray-700 mb-2">Expected file names:</p>
             <div className="grid grid-cols-2 gap-1 text-xs text-gray-600">
               <div className="flex items-center gap-1">
-                <span className={multiFileStatus['overlay'] === 'loaded' ? 'text-green-600' : multiFileStatus['overlay'] === 'error' ? 'text-red-600' : ''}>
+                <span className={multiFileStatus['overlay'] === 'loaded' ? theme.accent.text500 : multiFileStatus['overlay'] === 'error' ? 'text-red-600' : ''}>
                   {multiFileStatus['overlay'] === 'loaded' ? '✓' : multiFileStatus['overlay'] === 'error' ? '✗' : '•'}
                 </span>
                 <code className="bg-gray-200 px-1 rounded">{FILE_MAPPINGS.overlay}</code>
                 <span className="text-red-500">*</span>
               </div>
               <div className="flex items-center gap-1">
-                <span className={multiFileStatus['previous'] === 'loaded' ? 'text-green-600' : multiFileStatus['previous'] === 'error' ? 'text-red-600' : ''}>
+                <span className={multiFileStatus['previous'] === 'loaded' ? theme.accent.text500 : multiFileStatus['previous'] === 'error' ? 'text-red-600' : ''}>
                   {multiFileStatus['previous'] === 'loaded' ? '✓' : multiFileStatus['previous'] === 'error' ? '✗' : '•'}
                 </span>
                 <code className="bg-gray-200 px-1 rounded">{FILE_MAPPINGS.previous}</code>
               </div>
               <div className="flex items-center gap-1">
-                <span className={multiFileStatus['new'] === 'loaded' ? 'text-green-600' : multiFileStatus['new'] === 'error' ? 'text-red-600' : ''}>
+                <span className={multiFileStatus['new'] === 'loaded' ? theme.accent.text500 : multiFileStatus['new'] === 'error' ? 'text-red-600' : ''}>
                   {multiFileStatus['new'] === 'loaded' ? '✓' : multiFileStatus['new'] === 'error' ? '✗' : '•'}
                 </span>
                 <code className="bg-gray-200 px-1 rounded">{FILE_MAPPINGS.new}</code>
               </div>
               <div className="flex items-center gap-1">
-                <span className={multiFileStatus['changes'] === 'loaded' ? 'text-green-600' : multiFileStatus['changes'] === 'error' ? 'text-red-600' : ''}>
+                <span className={multiFileStatus['changes'] === 'loaded' ? theme.accent.text500 : multiFileStatus['changes'] === 'error' ? 'text-red-600' : ''}>
                   {multiFileStatus['changes'] === 'loaded' ? '✓' : multiFileStatus['changes'] === 'error' ? '✗' : '•'}
                 </span>
                 <code className="bg-gray-200 px-1 rounded">{FILE_MAPPINGS.changes}</code>
               </div>
               <div className="flex items-center gap-1">
-                <span className={multiFileStatus['legend'] === 'loaded' ? 'text-green-600' : multiFileStatus['legend'] === 'error' ? 'text-red-600' : ''}>
+                <span className={multiFileStatus['legend'] === 'loaded' ? theme.accent.text500 : multiFileStatus['legend'] === 'error' ? 'text-red-600' : ''}>
                   {multiFileStatus['legend'] === 'loaded' ? '✓' : multiFileStatus['legend'] === 'error' ? '✗' : '•'}
                 </span>
                 <code className="bg-gray-200 px-1 rounded">{FILE_MAPPINGS.legend}</code>
               </div>
               <div className="flex items-center gap-1">
-                <span className={multiFileStatus['sheets'] === 'loaded' ? 'text-green-600' : multiFileStatus['sheets'] === 'error' ? 'text-red-600' : ''}>
+                <span className={multiFileStatus['sheets'] === 'loaded' ? theme.accent.text500 : multiFileStatus['sheets'] === 'error' ? 'text-red-600' : ''}>
                   {multiFileStatus['sheets'] === 'loaded' ? '✓' : multiFileStatus['sheets'] === 'error' ? '✗' : '•'}
                 </span>
                 <code className="bg-gray-200 px-1 rounded">{FILE_MAPPINGS.sheets}</code>
@@ -604,7 +605,7 @@ export function UploadForm({ onUpload, disabled = false }: UploadFormProps) {
           <button
             onClick={handleCreatePage}
             disabled={!canCreate || disabled}
-            className="w-full py-2 px-4 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className={styles.buttonPrimaryFull}
           >
             Create Page
           </button>
@@ -699,7 +700,7 @@ export function UploadForm({ onUpload, disabled = false }: UploadFormProps) {
               </p>
             )}
             {jsonData && (
-              <p className="text-sm text-green-600">
+              <p className={`text-sm ${theme.accent.text500}`}>
                 Loaded {jsonData.changes.length} changes
               </p>
             )}
@@ -726,7 +727,7 @@ export function UploadForm({ onUpload, disabled = false }: UploadFormProps) {
               </p>
             )}
             {legendImageRef.current && (
-              <p className="text-sm text-green-600">
+              <p className={`text-sm ${theme.accent.text500}`}>
                 Legend loaded ({legendImageRef.current.width} × {legendImageRef.current.height})
               </p>
             )}
@@ -753,7 +754,7 @@ export function UploadForm({ onUpload, disabled = false }: UploadFormProps) {
               </p>
             )}
             {sheetsData && (
-              <p className="text-sm text-green-600">
+              <p className={`text-sm ${theme.accent.text500}`}>
                 Loaded {sheetsData.blocks.length} blocks from sheet {sheetsData.sheet_number}
               </p>
             )}
@@ -769,7 +770,7 @@ export function UploadForm({ onUpload, disabled = false }: UploadFormProps) {
             <button
               onClick={handleCreatePage}
               disabled={!canCreate || disabled}
-              className="w-full py-2 px-4 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className={styles.buttonPrimaryFull}
             >
               Create Page
             </button>

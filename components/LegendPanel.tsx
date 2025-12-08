@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { ImageData, SheetsData, SheetBlock } from '@/types/change';
+import { styles } from '@/lib/theme';
 
 interface LegendPanelProps {
   legendImage?: ImageData;
@@ -129,8 +130,8 @@ export function LegendPanel({ legendImage, sheetsData, onClose }: LegendPanelPro
                 onClick={() => setActiveTab('legend')}
                 className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === 'legend'
-                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    ? styles.tabActiveWithBg
+                    : styles.tabInactiveWithHover
                 }`}
               >
                 Legend
@@ -141,8 +142,8 @@ export function LegendPanel({ legendImage, sheetsData, onClose }: LegendPanelPro
                 onClick={() => setActiveTab('contents')}
                 className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
                   activeTab === 'contents'
-                    ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    ? styles.tabActiveWithBg
+                    : styles.tabInactiveWithHover
                 }`}
               >
                 Contents

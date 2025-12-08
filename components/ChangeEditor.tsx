@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Change, ActionType, DirectionType } from '@/types/change';
 import { ACTION_TYPES, DIRECTION_TYPES } from '@/types/change';
+import { styles } from '@/lib/theme';
 
 interface ChangeEditorProps {
   change: Change;
@@ -146,7 +147,7 @@ export function ChangeEditor({ change, onSave, onCancel }: ChangeEditorProps) {
               id="action"
               value={formState.action}
               onChange={handleActionChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white ${styles.focusRing}`}
             >
               {ACTION_TYPES.map((action) => (
                 <option key={action} value={action}>
@@ -169,7 +170,7 @@ export function ChangeEditor({ change, onSave, onCancel }: ChangeEditorProps) {
               onChange={handleTextChange('elements')}
               className={`
                 w-full px-3 py-2 border rounded-md shadow-sm
-                focus:outline-none focus:ring-2 focus:ring-blue-500
+                ${styles.focusRing}
                 ${errors.elements ? 'border-red-500' : 'border-gray-300'}
               `}
             />
@@ -187,7 +188,7 @@ export function ChangeEditor({ change, onSave, onCancel }: ChangeEditorProps) {
               id="direction"
               value={formState.direction ?? ''}
               onChange={handleDirectionChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-white ${styles.focusRing}`}
             >
               <option value="">None</option>
               {DIRECTION_TYPES.filter((d) => d !== null).map((direction) => (
@@ -210,7 +211,7 @@ export function ChangeEditor({ change, onSave, onCancel }: ChangeEditorProps) {
                 value={formState.fromValue}
                 onChange={handleTextChange('fromValue')}
                 placeholder="e.g., 10cm"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm ${styles.focusRing}`}
               />
             </div>
             <div>
@@ -223,7 +224,7 @@ export function ChangeEditor({ change, onSave, onCancel }: ChangeEditorProps) {
                 value={formState.toValue}
                 onChange={handleTextChange('toValue')}
                 placeholder="e.g., 15cm"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm ${styles.focusRing}`}
               />
             </div>
           </div>
@@ -239,7 +240,7 @@ export function ChangeEditor({ change, onSave, onCancel }: ChangeEditorProps) {
               onChange={handleTextChange('description')}
               placeholder="Add any additional notes about this change..."
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm resize-none ${styles.focusRing}`}
             />
           </div>
         </div>
@@ -249,14 +250,14 @@ export function ChangeEditor({ change, onSave, onCancel }: ChangeEditorProps) {
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={`px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 ${styles.focusRing}`}
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className={styles.buttonSave}
           >
             Save
           </button>

@@ -9,6 +9,7 @@ import { ExportButton } from '@/components/ExportButton';
 import { PageTabs } from '@/components/PageTabs';
 import { LegendPanel } from '@/components/LegendPanel';
 import { usePages } from '@/hooks/usePages';
+import { styles, theme } from '@/lib/theme';
 import type { AnalysisResult, Change, BoundingBox, DrawingState, ImageData, ViewMode, BeforeAfterImage, SheetsData } from '@/types/change';
 import { rawChangeToChange, generateId, changeToRawChange } from '@/types/change';
 
@@ -447,7 +448,7 @@ export default function Home() {
                 </h2>
                 <button
                   onClick={() => setShowChangeTooltips((prev) => !prev)}
-                  className={`p-1 rounded transition-colors ${showChangeTooltips ? 'text-blue-600 bg-blue-50' : 'text-gray-400 hover:text-gray-600'}`}
+                  className={`p-1 rounded transition-colors ${showChangeTooltips ? styles.toggleActive : 'text-gray-400 hover:text-gray-600'}`}
                   title={showChangeTooltips ? 'Hide tooltips' : 'Show tooltips'}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -473,7 +474,7 @@ export default function Home() {
                 {currentPage && currentPage.changes.length > 0 && (
                   <button
                     onClick={handleApproveAll}
-                    className="h-7 px-2 text-xs rounded transition-colors bg-blue-500 text-white hover:bg-blue-600"
+                    className={`h-7 px-2 text-xs rounded transition-colors ${styles.buttonPrimarySmall}`}
                     title={currentPage.changes.some((c) => c.approved ?? false) ? 'Unconfirm all changes' : 'Confirm all changes'}
                   >
                     {currentPage.changes.some((c) => c.approved ?? false) ? 'Unconfirm All' : 'Confirm All'}
@@ -485,8 +486,8 @@ export default function Home() {
                   className={`
                     w-7 h-7 rounded flex items-center justify-center text-lg font-medium transition-colors
                     ${isDrawingMode
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed'}
+                      ? styles.buttonPrimaryActive
+                      : styles.buttonPrimary + ' disabled:opacity-50 disabled:cursor-not-allowed'}
                   `}
                   title={isDrawingMode ? 'Cancel drawing (A or Esc)' : 'Add new change (A)'}
                 >
@@ -586,7 +587,7 @@ export default function Home() {
                   <button
                     onClick={() => setShowLegendPanel(!showLegendPanel)}
                     className={`p-1.5 rounded transition-colors ${
-                      showLegendPanel ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
+                      showLegendPanel ? styles.toggleActiveLight : 'hover:bg-gray-100'
                     }`}
                     title={showLegendPanel ? 'Hide sheet info (I)' : 'Show sheet info (I)'}
                   >
@@ -606,7 +607,7 @@ export default function Home() {
                           onClick={() => setBeforeAfterImage('previous')}
                           className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                             beforeAfterImage === 'previous'
-                              ? 'bg-blue-600 text-white'
+                              ? styles.buttonPrimaryActive
                               : 'text-gray-700 hover:bg-gray-300'
                           }`}
                         >
@@ -616,7 +617,7 @@ export default function Home() {
                           onClick={() => setBeforeAfterImage('new')}
                           className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                             beforeAfterImage === 'new'
-                              ? 'bg-blue-600 text-white'
+                              ? styles.buttonPrimaryActive
                               : 'text-gray-700 hover:bg-gray-300'
                           }`}
                         >
@@ -638,7 +639,7 @@ export default function Home() {
                           onClick={() => setViewMode('overlay')}
                           className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                             viewMode === 'overlay'
-                              ? 'bg-blue-600 text-white'
+                              ? styles.buttonPrimaryActive
                               : 'text-gray-700 hover:bg-gray-300'
                           }`}
                         >
@@ -648,7 +649,7 @@ export default function Home() {
                           onClick={() => setViewMode('before-after')}
                           className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                             viewMode === 'before-after'
-                              ? 'bg-blue-600 text-white'
+                              ? styles.buttonPrimaryActive
                               : 'text-gray-700 hover:bg-gray-300'
                           }`}
                         >
@@ -664,7 +665,7 @@ export default function Home() {
           </div>
 
           {isDrawingMode && currentPage && (
-            <div className="flex-shrink-0 mx-4 mt-2 p-2 bg-blue-50 text-blue-800 text-sm rounded">
+            <div className={`flex-shrink-0 mx-4 mt-2 p-2 ${styles.alertInfo} text-sm rounded`}>
               Click and drag on the image to draw a bounding box. Press Escape to cancel.
             </div>
           )}
@@ -709,7 +710,7 @@ export default function Home() {
               <div className="flex items-center justify-center h-full">
                 <button
                   onClick={() => setIsUploadModalOpen(true)}
-                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                  className={`px-4 py-2 text-sm font-medium rounded-md ${styles.buttonPrimary}`}
                 >
                   Add Page
                 </button>

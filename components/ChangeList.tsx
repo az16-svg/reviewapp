@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { Change } from '@/types/change';
+import { styles } from '@/lib/theme';
 
 interface ChangeListProps {
   changes: Change[];
@@ -84,9 +85,9 @@ export function ChangeList({
             onClick={() => onApprove(change.id)}
             className={`
               px-2 py-1.5 rounded border cursor-pointer transition-all
-              ${isSelected ? 'ring-2 ring-orange-500 border-orange-500 bg-orange-100' : ''}
-              ${!isSelected && isApproved ? 'border-blue-400 bg-blue-50' : ''}
-              ${!isSelected && !isApproved && isHovered ? 'bg-orange-50 border-orange-300' : ''}
+              ${isSelected ? styles.selectedCard : ''}
+              ${!isSelected && isApproved ? styles.approvedBorder : ''}
+              ${!isSelected && !isApproved && isHovered ? styles.hoveredCard : ''}
               ${!isSelected && !isApproved && !isHovered ? 'border-gray-200 bg-white' : ''}
               hover:shadow-sm
             `}
@@ -96,7 +97,7 @@ export function ChangeList({
               <div
                 className={`
                   w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors
-                  ${isApproved ? 'border-blue-500 bg-blue-500' : 'border-gray-300 bg-white'}
+                  ${isApproved ? styles.approvedCheckbox : styles.unapprovedCheckbox}
                 `}
               >
                 {isApproved && (
@@ -136,7 +137,7 @@ export function ChangeList({
                     e.stopPropagation();
                     onCenter(change.id);
                   }}
-                  className="p-1 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded"
+                  className={`p-1 rounded ${styles.iconHoverAccent}`}
                   aria-label="Center"
                   title="Center on change (C)"
                 >
@@ -150,7 +151,7 @@ export function ChangeList({
                     e.stopPropagation();
                     onEdit(change.id);
                   }}
-                  className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                  className={`p-1 rounded ${styles.iconHoverPrimary}`}
                   aria-label="Edit"
                   title="Edit change (E)"
                 >
