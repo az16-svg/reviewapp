@@ -28,6 +28,26 @@ export interface ImageData {
   height: number;
 }
 
+// Sheets JSON block structure from external tools
+export interface SheetBlock {
+  block_type: string;
+  storage_type: string;
+  image_uri: string | null;
+  text_content: string | null;
+  bbox_xmin: number;
+  bbox_ymin: number;
+  bbox_xmax: number;
+  bbox_ymax: number;
+  description: string | null;
+  title_block_info: Record<string, unknown> | null;
+}
+
+export interface SheetsData {
+  image_uri: string;
+  sheet_number: string;
+  blocks: SheetBlock[];
+}
+
 export type ViewMode = 'overlay' | 'before-after';
 export type BeforeAfterImage = 'previous' | 'new';
 
@@ -41,6 +61,10 @@ export interface Page {
   // Optional before/after images
   previousImage?: ImageData;
   newImage?: ImageData;
+  // Optional legend image
+  legendImage?: ImageData;
+  // Optional sheets metadata (blocks data)
+  sheetsData?: SheetsData;
   changes: Change[];
   createdAt: Date;
 }

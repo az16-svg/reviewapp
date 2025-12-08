@@ -7,8 +7,9 @@ import { ChangeList } from '@/components/ChangeList';
 import { ChangeEditor } from '@/components/ChangeEditor';
 import { ExportButton } from '@/components/ExportButton';
 import { PageTabs } from '@/components/PageTabs';
+import { LegendPanel } from '@/components/LegendPanel';
 import { usePages } from '@/hooks/usePages';
-import type { AnalysisResult, Change, BoundingBox, DrawingState, ImageData, ViewMode, BeforeAfterImage } from '@/types/change';
+import type { AnalysisResult, Change, BoundingBox, DrawingState, ImageData, ViewMode, BeforeAfterImage, SheetsData } from '@/types/change';
 import { rawChangeToChange, generateId, changeToRawChange } from '@/types/change';
 
 export default function Home() {
@@ -25,6 +26,7 @@ export default function Home() {
   const [undoStack, setUndoStack] = useState<Array<{ pageId: string; changes: Change[] }>>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('overlay');
   const [beforeAfterImage, setBeforeAfterImage] = useState<BeforeAfterImage>('previous');
+  const [showLegendPanel, setShowLegendPanel] = useState(false);
   const imageViewerContainerRef = useRef<HTMLDivElement>(null);
 
   // Check if before/after mode is available (both previous and new images exist)
@@ -102,6 +104,12 @@ export default function Home() {
         }, 10);
       }
 
+      // 'I' key to toggle sheet info panel
+      if ((e.key === 'i' || e.key === 'I') && currentPage && (currentPage.legendImage || currentPage.sheetsData)) {
+        e.preventDefault();
+        setShowLegendPanel((prev) => !prev);
+      }
+
       // Ctrl/Cmd + Z to undo
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
@@ -141,7 +149,9 @@ export default function Home() {
       overlayImage: ImageData,
       imageName: string,
       previousImage: ImageData | null,
-      newImage: ImageData | null
+      newImage: ImageData | null,
+      legendImage: ImageData | null,
+      sheetsData: SheetsData | null
     ) => {
       const rawChanges = jsonData ? jsonData.changes.map(rawChangeToChange) : [];
       // Sort changes only on initial load: top-to-bottom (y-axis priority), then left-to-right (x-axis)
@@ -160,6 +170,8 @@ export default function Home() {
         imageHeight: overlayImage.height,
         previousImage: previousImage || undefined,
         newImage: newImage || undefined,
+        legendImage: legendImage || undefined,
+        sheetsData: sheetsData || undefined,
         changes,
         createdAt: new Date(),
       });
@@ -357,6 +369,7 @@ export default function Home() {
       setHoveredChangeId(null);
       setSelectedChangeId(null);
       setViewMode('overlay'); // Reset to overlay when switching pages
+      setShowLegendPanel(false); // Close legend panel when switching pages
     },
     [setCurrentPage]
   );
@@ -568,6 +581,21 @@ export default function Home() {
                   </svg>
                 </button>
 
+                {/* Legend Panel Toggle - only show if legend or sheets data exists */}
+                {(currentPage?.legendImage || currentPage?.sheetsData) && (
+                  <button
+                    onClick={() => setShowLegendPanel(!showLegendPanel)}
+                    className={`p-1.5 rounded transition-colors ${
+                      showLegendPanel ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'
+                    }`}
+                    title={showLegendPanel ? 'Hide sheet info (I)' : 'Show sheet info (I)'}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </button>
+                )}
+
                 {/* Before/After Image Toggle - only show in before-after mode */}
                 {viewMode === 'before-after' && canUseBeforeAfter && (
                   <>
@@ -709,14 +737,23 @@ export default function Home() {
               onCancel={handleCancelNewChange}
             />
           )}
+
+          {/* Legend Panel - for viewing legend image and sheet contents */}
+          {showLegendPanel && currentPage && (currentPage.legendImage || currentPage.sheetsData) && (
+            <LegendPanel
+              legendImage={currentPage.legendImage}
+              sheetsData={currentPage.sheetsData}
+              onClose={() => setShowLegendPanel(false)}
+            />
+          )}
         </div>
       </div>
 
       {/* Upload Modal */}
       {isUploadModalOpen && (
         <UploadModal
-          onUpload={(jsonData, overlayImage, imageName, previousImage, newImage) => {
-            handleUpload(jsonData, overlayImage, imageName, previousImage, newImage);
+          onUpload={(jsonData, overlayImage, imageName, previousImage, newImage, legendImage, sheetsData) => {
+            handleUpload(jsonData, overlayImage, imageName, previousImage, newImage, legendImage, sheetsData);
             setIsUploadModalOpen(false);
           }}
           onClose={() => setIsUploadModalOpen(false)}

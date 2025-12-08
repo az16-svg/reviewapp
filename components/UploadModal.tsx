@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { UploadForm } from './UploadForm';
-import type { AnalysisResult, ImageData } from '@/types/change';
+import type { AnalysisResult, ImageData, SheetsData } from '@/types/change';
 
 interface UploadModalProps {
   onUpload: (
@@ -10,7 +10,9 @@ interface UploadModalProps {
     overlayImage: ImageData,
     imageName: string,
     previousImage: ImageData | null,
-    newImage: ImageData | null
+    newImage: ImageData | null,
+    legendImage: ImageData | null,
+    sheetsData: SheetsData | null
   ) => void;
   onClose: () => void;
 }
@@ -39,9 +41,11 @@ export function UploadModal({ onUpload, onClose }: UploadModalProps) {
     overlayImage: ImageData,
     imageName: string,
     previousImage: ImageData | null,
-    newImage: ImageData | null
+    newImage: ImageData | null,
+    legendImage: ImageData | null,
+    sheetsData: SheetsData | null
   ) => {
-    onUpload(jsonData, overlayImage, imageName, previousImage, newImage);
+    onUpload(jsonData, overlayImage, imageName, previousImage, newImage, legendImage, sheetsData);
     onClose();
   };
 
