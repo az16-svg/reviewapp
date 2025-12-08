@@ -1,8 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { ImageData, SheetsData, SheetBlock } from '@/types/change';
 import { styles } from '@/lib/theme';
+
+const MIN_WIDTH = 280;
+const MAX_WIDTH = 800;
+const DEFAULT_WIDTH = 384; // w-96 = 24rem = 384px
+const STORAGE_KEY = 'legendPanelWidth';
 
 interface LegendPanelProps {
   legendImage?: ImageData;
@@ -79,6 +84,26 @@ export function LegendPanel({ legendImage, sheetsData, onClose }: LegendPanelPro
   const defaultTab: TabType = hasLegend ? 'legend' : 'contents';
   const [activeTab, setActiveTab] = useState<TabType>(defaultTab);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+  const [panelWidth, setPanelWidth] = useState(() => {
+    // Load saved width from localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= MIN_WIDTH && parsed <= MAX_WIDTH) {
+          return parsed;
+        }
+      }
+    }
+    return DEFAULT_WIDTH;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Save width to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, String(panelWidth));
+  }, [panelWidth]);
 
   const textBlocks = sheetsData ? getTextBlocks(sheetsData.blocks.filter(b => b.storage_type === 'text')) : [];
 
@@ -94,6 +119,38 @@ export function LegendPanel({ legendImage, sheetsData, onClose }: LegendPanelPro
     });
   };
 
+  // Handle resize
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!panelRef.current) return;
+      const parentRect = panelRef.current.parentElement?.getBoundingClientRect();
+      if (!parentRect) return;
+
+      // Calculate new width based on mouse position from the right edge
+      const newWidth = parentRect.right - e.clientX;
+      setPanelWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, newWidth)));
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
   // Handle Escape key to close panel
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -107,7 +164,20 @@ export function LegendPanel({ legendImage, sheetsData, onClose }: LegendPanelPro
   }, [onClose]);
 
   return (
-    <div className="absolute top-0 right-0 bottom-0 w-96 bg-white border-l shadow-lg flex flex-col z-20">
+    <div
+      ref={panelRef}
+      className="absolute top-0 right-0 bottom-0 bg-white border-l shadow-lg flex flex-col z-20"
+      style={{ width: panelWidth }}
+    >
+      {/* Resize handle */}
+      <div
+        onMouseDown={handleMouseDown}
+        className={`absolute top-0 left-0 bottom-0 w-1 cursor-ew-resize hover:bg-slate-300 transition-colors ${
+          isResizing ? 'bg-slate-400' : 'bg-transparent'
+        }`}
+        title="Drag to resize"
+      />
+
       {/* Header */}
       <div className="flex-shrink-0 p-3 border-b bg-gray-50 flex items-center justify-between">
         <h2 className="font-medium text-gray-900">Sheet Info</h2>
