@@ -520,8 +520,8 @@ export default function Home() {
         {/* Right side: Image viewer (takes remaining space) */}
         <div className="flex-1 flex flex-col overflow-hidden bg-gray-100 relative">
           {/* Toolbar */}
-          <div className="flex-shrink-0 px-4 py-2 bg-white border-b flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 px-4 py-3 bg-white border-b flex items-center justify-between">
+            <div className="flex items-center gap-3 min-h-[28px]">
               <h2 className="font-medium text-gray-900">{currentPage ? `Page ${currentPageIndex + 1}` : 'No page selected'}</h2>
               {currentPage && (
                 <span className="text-sm text-gray-500">
