@@ -8,13 +8,19 @@ import { ChangeEditor } from '@/components/ChangeEditor';
 import { ExportButton } from '@/components/ExportButton';
 import { PageTabs } from '@/components/PageTabs';
 import { LegendPanel } from '@/components/LegendPanel';
+import { ProjectContextButton } from '@/components/ProjectContextButton';
+import { ChatPanel } from '@/components/ChatPanel';
 import { usePages } from '@/hooks/usePages';
+import { useToast } from '@/components/Toast';
 import { styles, theme } from '@/lib/theme';
 import type { AnalysisResult, Change, BoundingBox, DrawingState, ImageData, ViewMode, BeforeAfterImage, SheetsData } from '@/types/change';
+import type { ProjectContext } from '@/types/context';
 import { rawChangeToChange, generateId, changeToRawChange } from '@/types/change';
 
 export default function Home() {
   const { pages, currentPage, currentPageIndex, addPage, deletePage, setCurrentPage, updatePageChanges } = usePages();
+  const { showToast } = useToast();
+  const [projectContext, setProjectContext] = useState<ProjectContext | null>(null);
   const [hoveredChangeId, setHoveredChangeId] = useState<string | null>(null);
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null);
   const [isDrawingMode, setIsDrawingMode] = useState(false);
@@ -28,6 +34,7 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<ViewMode>('overlay');
   const [beforeAfterImage, setBeforeAfterImage] = useState<BeforeAfterImage>('previous');
   const [showLegendPanel, setShowLegendPanel] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const imageViewerContainerRef = useRef<HTMLDivElement>(null);
 
   // Check if before/after mode is available (both previous and new images exist)
@@ -36,6 +43,15 @@ export default function Home() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle shortcuts when focused on input elements (chat, forms, etc.)
+      const activeElement = document.activeElement;
+      const isInputFocused = activeElement instanceof HTMLInputElement ||
+        activeElement instanceof HTMLTextAreaElement ||
+        activeElement?.getAttribute('contenteditable') === 'true';
+
+      // Only allow Escape when input is focused (to close panels)
+      if (isInputFocused && e.key !== 'Escape') return;
+
       // Don't handle shortcuts when editing or adding new change
       if (editingChangeId || pendingNewChange) return;
 
@@ -53,11 +69,13 @@ export default function Home() {
         return;
       }
 
-      // Escape to cancel drawing mode
+      // Escape to cancel drawing mode or close chat panel
       if (e.key === 'Escape') {
         if (isDrawingMode) {
           setIsDrawingMode(false);
           setDrawingState(null);
+        } else if (isChatOpen) {
+          setIsChatOpen(false);
         }
       }
 
@@ -406,6 +424,16 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }, [currentPage, currentPageIndex]);
 
+  const handleProjectContextUpload = useCallback((context: ProjectContext) => {
+    setProjectContext(context);
+    const fileCount = context.files.length;
+    showToast(`Loaded ${fileCount} context file${fileCount !== 1 ? 's' : ''}`, 'success');
+  }, [showToast]);
+
+  const handleProjectContextError = useCallback((error: string) => {
+    showToast(`Failed to load context: ${error}`, 'error');
+  }, [showToast]);
+
   return (
     <main className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
@@ -413,7 +441,13 @@ export default function Home() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">Change Review</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <ProjectContextButton
+            projectContext={projectContext}
+            onUpload={handleProjectContextUpload}
+            onError={handleProjectContextError}
+          />
+          <div className="w-px h-6 bg-gray-300" />
           {currentPage && (
             <button
               onClick={handleExportJson}
@@ -597,6 +631,19 @@ export default function Home() {
                   </button>
                 )}
 
+                {/* Chat Panel Toggle */}
+                <button
+                  onClick={() => setIsChatOpen(!isChatOpen)}
+                  className={`p-1.5 rounded transition-colors ${
+                    isChatOpen ? styles.toggleActiveLight : 'hover:bg-gray-100'
+                  }`}
+                  title={isChatOpen ? 'Hide Chat' : 'Open Chat'}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                </button>
+
                 {/* Before/After Image Toggle - only show in before-after mode */}
                 {viewMode === 'before-after' && canUseBeforeAfter && (
                   <>
@@ -745,6 +792,15 @@ export default function Home() {
               legendImage={currentPage.legendImage}
               sheetsData={currentPage.sheetsData}
               onClose={() => setShowLegendPanel(false)}
+            />
+          )}
+
+          {/* Chat Panel - AI assistant for drawing questions */}
+          {isChatOpen && (
+            <ChatPanel
+              projectContext={projectContext}
+              sheetContext={currentPage?.sheetsData ?? null}
+              onClose={() => setIsChatOpen(false)}
             />
           )}
         </div>

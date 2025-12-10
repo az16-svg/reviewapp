@@ -1,4 +1,5 @@
 import type { BoundingBox, RawChange, AnalysisResult } from '@/types/change';
+import { z } from 'zod';
 
 export interface ValidationResult {
   valid: boolean;
@@ -131,3 +132,66 @@ export function parseAnalysisJson(jsonString: string): { result: AnalysisResult 
 
   return { result: parsed as AnalysisResult, errors: [] };
 }
+
+// ===== Context Validation Schemas for Chat Agent =====
+
+export const majorChangeSchema = z.object({
+  sheetNumber: z.string(),
+  changeType: z.string(),
+  description: z.string(),
+  severity: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+});
+
+export const sheetSummarySchema = z.object({
+  sheetNumber: z.string(),
+  sheetName: z.string().optional(),
+  changeCount: z.number(),
+  summary: z.string().optional(),
+});
+
+export const overlayAnalysisSchema = z.object({
+  summary: z.string(),
+  totalChangeCount: z.number().int().nonnegative(),
+  majorChanges: z.array(majorChangeSchema),
+  sheetSummaries: z.array(sheetSummarySchema).optional(),
+});
+
+export const projectContextSchema = z.object({
+  projectId: z.string().optional(),
+  projectName: z.string().min(1, 'Project name is required'),
+  location: z.string().optional(),
+  background: z.string().optional(),
+  currentStage: z.string().optional(),
+  overlayAnalysis: overlayAnalysisSchema.optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  loadedAt: z.string().optional(),
+});
+
+export const legendItemSchema = z.object({
+  symbol: z.string(),
+  description: z.string(),
+  category: z.string().optional(),
+  appearance: z.string().optional(),
+});
+
+export const revisionSchema = z.object({
+  number: z.string(),
+  date: z.string(),
+  description: z.string(),
+  author: z.string().optional(),
+});
+
+export const sheetContextSchema = z.object({
+  sheetNumber: z.string().min(1, 'Sheet number is required'),
+  sheetName: z.string().optional(),
+  discipline: z.string().optional(),
+  legends: z.array(legendItemSchema).default([]),
+  generalNotes: z.array(z.string()).default([]),
+  revisions: z.array(revisionSchema).optional(),
+  scale: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+// Type exports from schemas
+export type ProjectContextInput = z.infer<typeof projectContextSchema>;
+export type SheetContextInput = z.infer<typeof sheetContextSchema>;
