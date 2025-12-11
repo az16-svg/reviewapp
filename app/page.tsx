@@ -454,7 +454,7 @@ export default function Home() {
       {/* Header */}
       <header className="flex-shrink-0 px-4 py-3 border-b bg-white flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Change Review</h1>
+          <h1 className="text-xl font-bold text-gray-900">BuildTrace</h1>
         </div>
         <div className="flex items-center gap-3">
           <ProjectContextButton

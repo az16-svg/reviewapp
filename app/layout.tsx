@@ -3,7 +3,7 @@ import { Providers } from '@/components/Providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Change Review',
+  title: 'BuildTrace',
   description: 'Review and edit vision analysis change detection results',
 };
 
