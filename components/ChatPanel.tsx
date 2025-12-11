@@ -7,7 +7,6 @@ import { ChatInput } from './ChatInput';
 import { useChat } from '@/hooks/useChat';
 import type { ProjectContext } from '@/types/context';
 import type { SheetsData } from '@/types/change';
-import { styles } from '@/lib/theme';
 
 const MIN_WIDTH = 320;
 const MAX_WIDTH = 600;

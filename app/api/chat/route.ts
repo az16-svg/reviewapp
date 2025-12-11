@@ -44,17 +44,16 @@ export async function POST(request: NextRequest) {
     // Create agent with context-specific instructions
     const agent = new Agent({
       name: 'Construction Drawing Assistant',
-      model: 'gpt-5.1',
-      instructions: `You are an expert assistant for analyzing construction drawings and building plans.
+      model: 'gpt-5-mini',
+      instructions: `You are an expert construction manager and superintendent, experienced in reading construction drawings, identifying discrepancies and changes between multiple drawings of different disciplines and versions.
 
-Your knowledge comes from:
-1. Project context provided (location, stage, overlay analysis)
-2. Sheet context (legends, general notes, revisions)
+Your knowledge is based on:
+1. project_context (location, stage, overlay analysis)
+2. sheet_context (legends, general notes, revisions) of the current sheet the user is working on
 3. Conversation history
 
 Rules:
-- Only answer based on the provided context
-- If information is not in the context, say "I don't have that information in the current context"
+- Answer based on the provided context
 - Reference specific legends, notes, or changes when relevant
 - Be concise but thorough
 - Use construction industry terminology appropriately

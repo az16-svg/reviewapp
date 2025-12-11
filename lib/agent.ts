@@ -16,7 +16,7 @@ export function buildContextPrompt(
   project: ProjectContext | null,
   sheet: SheetsData | null
 ): string {
-  let context = '## Available Context\n\n';
+  let context = '<project_context>\n\n';
 
   // Add project context files
   if (project && project.files.length > 0) {
@@ -26,9 +26,11 @@ export function buildContextPrompt(
       context += `${file.content}\n\n`;
     });
   }
+  context += '</project_context>\n\n';
 
   // Add sheet context
   if (sheet) {
+    context += '<sheet_context>\n\n';
     context += `\n### Current Sheet: ${sheet.sheet_number}\n`;
 
     // Filter for text blocks only and group by block_type
@@ -70,6 +72,7 @@ export function buildContextPrompt(
       }
     }
   }
+  context += '</sheet_context>\n\n';
 
   if ((!project || project.files.length === 0) && !sheet) {
     context += 'No context loaded. Please upload context files first.\n';
