@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useLayoutEffect, useCallback, useState } from 'react';
 import type { Change, BoundingBox, DrawingState } from '@/types/change';
 
 // Resize handle types (including 'move' for dragging the entire box)
@@ -29,6 +29,7 @@ interface ImageViewerProps {
   zoomLevel?: number;
   onZoomChange?: (zoom: number) => void;
   isMagnifierMode?: boolean;
+  scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 // Bounding box colors
@@ -93,6 +94,7 @@ export function ImageViewer({
   zoomLevel = 1,
   onZoomChange,
   isMagnifierMode = false,
+  scrollContainerRef,
 }: ImageViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -105,6 +107,11 @@ export function ImageViewer({
   const drawStartRef = useRef<{ x: number; y: number } | null>(null);
   const lastPinchDistanceRef = useRef<number | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
+  const zoomAnchorRef = useRef<{ imageX: number; imageY: number; screenX: number; screenY: number } | null>(null);
+  const zoomTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingScrollRef = useRef<{ left: number; top: number } | null>(null);
+  const zoomLevelRef = useRef(zoomLevel);
+  zoomLevelRef.current = zoomLevel;
 
   const displayWidth = imageWidth * zoomLevel;
   const displayHeight = imageHeight * zoomLevel;
@@ -214,6 +221,95 @@ export function ImageViewer({
       container.removeEventListener('touchend', handleTouchEnd);
     };
   }, [onZoomChange, zoomLevel]);
+
+  // Trackpad pinch-to-zoom (wheel event with ctrlKey)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !onZoomChange) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Trackpad pinch gestures are reported as wheel events with ctrlKey
+      if (e.ctrlKey) {
+        e.preventDefault();
+
+        const scrollContainer = scrollContainerRef?.current;
+        const currentZoom = zoomLevelRef.current;
+
+        // On first zoom event, capture the anchor point
+        if (!zoomAnchorRef.current && scrollContainer) {
+          const containerRect = container.getBoundingClientRect();
+          // Mouse position relative to the image container
+          const mouseXInImage = e.clientX - containerRect.left;
+          const mouseYInImage = e.clientY - containerRect.top;
+          // Convert to image coordinates (independent of zoom)
+          const imageX = mouseXInImage / currentZoom;
+          const imageY = mouseYInImage / currentZoom;
+          // Store the client position for stable reference
+          zoomAnchorRef.current = {
+            imageX,
+            imageY,
+            screenX: e.clientX,
+            screenY: e.clientY
+          };
+        }
+
+        // Clear existing timeout and set a new one to reset anchor after gesture ends
+        if (zoomTimeoutRef.current) {
+          clearTimeout(zoomTimeoutRef.current);
+        }
+        zoomTimeoutRef.current = setTimeout(() => {
+          zoomAnchorRef.current = null;
+        }, 200);
+
+        // Calculate new zoom
+        const zoomDelta = -e.deltaY * 0.01;
+        const newZoom = Math.min(4, Math.max(0.2, currentZoom + zoomDelta));
+
+        // Store pending scroll for useLayoutEffect to apply after DOM commit
+        if (scrollContainer && zoomAnchorRef.current) {
+          const { imageX, imageY, screenX, screenY } = zoomAnchorRef.current;
+          const scrollRect = scrollContainer.getBoundingClientRect();
+
+          // Where the anchor point will be in the new zoomed image
+          const newAnchorInImageX = imageX * newZoom;
+          const newAnchorInImageY = imageY * newZoom;
+
+          // Where we want the anchor to appear on screen (same client position)
+          const targetInScrollX = screenX - scrollRect.left;
+          const targetInScrollY = screenY - scrollRect.top;
+
+          // Calculate scroll needed
+          const padding = 16; // p-4 = 1rem = 16px
+          const newScrollLeft = Math.max(0, newAnchorInImageX - targetInScrollX + padding);
+          const newScrollTop = Math.max(0, newAnchorInImageY - targetInScrollY + padding);
+
+          // Store for useLayoutEffect to apply synchronously after render
+          pendingScrollRef.current = { left: newScrollLeft, top: newScrollTop };
+        }
+
+        onZoomChange(newZoom);
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+      if (zoomTimeoutRef.current) {
+        clearTimeout(zoomTimeoutRef.current);
+      }
+    };
+  }, [onZoomChange, scrollContainerRef]);
+
+  // Apply pending scroll position synchronously after zoom render commits
+  useLayoutEffect(() => {
+    if (pendingScrollRef.current && scrollContainerRef?.current) {
+      const { left, top } = pendingScrollRef.current;
+      scrollContainerRef.current.scrollLeft = left;
+      scrollContainerRef.current.scrollTop = top;
+      pendingScrollRef.current = null;
+    }
+  }, [zoomLevel, scrollContainerRef]);
 
   // Draw bounding boxes and resize handles
   useEffect(() => {

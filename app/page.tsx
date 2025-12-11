@@ -782,6 +782,7 @@ export default function Home() {
                   zoomLevel={zoomLevel}
                   onZoomChange={setZoomLevel}
                   isMagnifierMode={isMagnifierMode}
+                  scrollContainerRef={imageViewerContainerRef}
                 />
               );
             })() : (
