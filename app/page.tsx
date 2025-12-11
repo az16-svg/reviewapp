@@ -35,6 +35,7 @@ export default function Home() {
   const [beforeAfterImage, setBeforeAfterImage] = useState<BeforeAfterImage>('previous');
   const [showLegendPanel, setShowLegendPanel] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isMagnifierMode, setIsMagnifierMode] = useState(false);
   const imageViewerContainerRef = useRef<HTMLDivElement>(null);
 
   // Check if before/after mode is available (both previous and new images exist)
@@ -79,10 +80,24 @@ export default function Home() {
         }
       }
 
+      // 'Q' key to toggle chat panel
+      if (e.key === 'q' || e.key === 'Q') {
+        e.preventDefault();
+        setIsChatOpen((prev) => !prev);
+      }
+
       // 'A' key to toggle add change mode (only when a page is loaded)
       if ((e.key === 'a' || e.key === 'A') && currentPage) {
         e.preventDefault();
         setIsDrawingMode((prev) => !prev);
+        setIsMagnifierMode(false);
+      }
+
+      // 'M' key to toggle magnifier mode (only when a page is loaded)
+      if ((e.key === 'm' || e.key === 'M') && currentPage) {
+        e.preventDefault();
+        setIsMagnifierMode((prev) => !prev);
+        setIsDrawingMode(false);
       }
 
       // 'E' key to edit hovered change
@@ -562,6 +577,11 @@ export default function Home() {
                   {currentPage.imageWidth} × {currentPage.imageHeight}
                 </span>
               )}
+              {isDrawingMode && currentPage && (
+                <span className="text-sm text-blue-600">
+                  — Click and drag to draw bounding box. Escape to cancel.
+                </span>
+              )}
             </div>
             {currentPage && (
               <div className="flex items-center gap-1">
@@ -616,6 +636,22 @@ export default function Home() {
                   </svg>
                 </button>
 
+                {/* Magnifier Toggle */}
+                <button
+                  onClick={() => {
+                    setIsMagnifierMode(!isMagnifierMode);
+                    if (!isMagnifierMode) setIsDrawingMode(false);
+                  }}
+                  className={`p-1.5 rounded transition-colors ${
+                    isMagnifierMode ? styles.toggleActiveLight : 'hover:bg-gray-100'
+                  }`}
+                  title={isMagnifierMode ? 'Disable magnifier (M)' : 'Enable magnifier (M)'}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </button>
+
                 {/* Legend Panel Toggle - only show if legend or sheets data exists */}
                 {(currentPage?.legendImage || currentPage?.sheetsData) && (
                   <button
@@ -637,7 +673,7 @@ export default function Home() {
                   className={`p-1.5 rounded transition-colors ${
                     isChatOpen ? styles.toggleActiveLight : 'hover:bg-gray-100'
                   }`}
-                  title={isChatOpen ? 'Hide Chat' : 'Open Chat'}
+                  title={isChatOpen ? 'Hide Chat (Q)' : 'Open Chat (Q)'}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -711,12 +747,6 @@ export default function Home() {
             )}
           </div>
 
-          {isDrawingMode && currentPage && (
-            <div className={`flex-shrink-0 mx-4 mt-2 p-2 ${styles.alertInfo} text-sm rounded`}>
-              Click and drag on the image to draw a bounding box. Press Escape to cancel.
-            </div>
-          )}
-
           {/* Image viewer with scroll */}
           <div ref={imageViewerContainerRef} className="flex-1 overflow-auto p-4">
             {currentPage ? (() => {
@@ -751,6 +781,7 @@ export default function Home() {
                   onBoxClick={handleBoxClick}
                   zoomLevel={zoomLevel}
                   onZoomChange={setZoomLevel}
+                  isMagnifierMode={isMagnifierMode}
                 />
               );
             })() : (

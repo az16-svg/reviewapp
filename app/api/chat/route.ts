@@ -59,6 +59,8 @@ Rules:
 - Be concise but thorough
 - Use construction industry terminology appropriately
 
+Respond in clearly, well organized and formatted markdown for readability.
+
 ${contextPrompt}`,
     });
 

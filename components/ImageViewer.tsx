@@ -28,6 +28,7 @@ interface ImageViewerProps {
   onBoxClick?: (changeId: string) => void;
   zoomLevel?: number;
   onZoomChange?: (zoom: number) => void;
+  isMagnifierMode?: boolean;
 }
 
 // Bounding box colors
@@ -73,6 +74,10 @@ function getCursorForHandle(handle: ResizeHandle): string {
   }
 }
 
+// Magnifier settings
+const MAGNIFIER_SIZE = 300; // Diameter in pixels
+const MAGNIFIER_ZOOM = 5; // 100% zoom (1:1 pixel view at 20% base zoom)
+
 export function ImageViewer({
   imageData,
   imageWidth,
@@ -87,12 +92,16 @@ export function ImageViewer({
   onBoxClick,
   zoomLevel = 1,
   onZoomChange,
+  isMagnifierMode = false,
 }: ImageViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const magnifierCanvasRef = useRef<HTMLCanvasElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [resizeState, setResizeState] = useState<ResizeState | null>(null);
   const [hoveredHandle, setHoveredHandle] = useState<ResizeHandle>(null);
+  const [magnifierPos, setMagnifierPos] = useState<{ x: number; y: number } | null>(null);
   const drawStartRef = useRef<{ x: number; y: number } | null>(null);
   const lastPinchDistanceRef = useRef<number | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -283,6 +292,66 @@ export function ImageViewer({
     };
   }, [changes, hoveredChangeId, displayWidth, displayHeight, scale, isDrawingMode, drawingState, resizeState, getDisplayBox]);
 
+  // Draw magnifier
+  useEffect(() => {
+    if (!isMagnifierMode || !magnifierPos || !imageRef.current) return;
+
+    const magnifierCanvas = magnifierCanvasRef.current;
+    if (!magnifierCanvas) return;
+
+    const ctx = magnifierCanvas.getContext('2d');
+    if (!ctx) return;
+
+    const img = imageRef.current;
+    const radius = MAGNIFIER_SIZE / 2;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, MAGNIFIER_SIZE, MAGNIFIER_SIZE);
+
+    // Create circular clip
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(radius, radius, radius - 2, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Calculate source area from original image
+    const sourceSize = MAGNIFIER_SIZE / (scale * MAGNIFIER_ZOOM);
+    const sourceX = (magnifierPos.x / scale) - sourceSize / 2;
+    const sourceY = (magnifierPos.y / scale) - sourceSize / 2;
+
+    // Draw zoomed portion of image
+    ctx.drawImage(
+      img,
+      sourceX,
+      sourceY,
+      sourceSize,
+      sourceSize,
+      0,
+      0,
+      MAGNIFIER_SIZE,
+      MAGNIFIER_SIZE
+    );
+
+    ctx.restore();
+
+    // Draw border
+    ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(radius, radius, radius - 2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Draw crosshair
+    ctx.strokeStyle = 'rgba(59, 130, 246, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(radius, radius - 10);
+    ctx.lineTo(radius, radius + 10);
+    ctx.moveTo(radius - 10, radius);
+    ctx.lineTo(radius + 10, radius);
+    ctx.stroke();
+  }, [isMagnifierMode, magnifierPos, scale]);
+
   const getImageCoordinates = useCallback(
     (e: React.MouseEvent) => {
       const canvas = canvasRef.current;
@@ -343,6 +412,16 @@ export function ImageViewer({
     (e: React.MouseEvent) => {
       const coords = getImageCoordinates(e);
       if (!coords) return;
+
+      // Always update magnifier position (so it's ready when mode is toggled on)
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const rect = canvas.getBoundingClientRect();
+        setMagnifierPos({
+          x: e.clientX - rect.left,
+          y: e.clientY - rect.top,
+        });
+      }
 
       // Handle resizing or moving
       if (resizeState) {
@@ -492,10 +571,12 @@ export function ImageViewer({
       setResizeState(null);
     }
     setHoveredHandle(null);
+    setMagnifierPos(null);
   }, [isDrawing, onDrawingStateChange, resizeState, onChangeLocationUpdate]);
 
   // Determine cursor
   const getCursor = () => {
+    if (isMagnifierMode) return 'none';
     if (isDrawingMode) return 'crosshair';
     if (resizeState) return getCursorForHandle(resizeState.handle);
     if (hoveredHandle) return getCursorForHandle(hoveredHandle);
@@ -521,12 +602,14 @@ export function ImageViewer({
       style={{ width: displayWidth, height: displayHeight, touchAction: 'none', cursor: getCursor() }}
     >
       <img
+        ref={imageRef}
         src={imageData}
         alt="Overlay"
         width={displayWidth}
         height={displayHeight}
         className="block"
         draggable={false}
+        crossOrigin="anonymous"
       />
       <canvas
         ref={canvasRef}
@@ -538,6 +621,21 @@ export function ImageViewer({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
       />
+      {/* Magnifier overlay */}
+      {isMagnifierMode && magnifierPos && (
+        <canvas
+          ref={magnifierCanvasRef}
+          width={MAGNIFIER_SIZE}
+          height={MAGNIFIER_SIZE}
+          className="absolute pointer-events-none"
+          style={{
+            left: magnifierPos.x - MAGNIFIER_SIZE / 2,
+            top: magnifierPos.y - MAGNIFIER_SIZE / 2,
+            borderRadius: '50%',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+          }}
+        />
+      )}
     </div>
   );
 }
