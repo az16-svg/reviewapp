@@ -187,16 +187,16 @@ export function FileDiff({ filename, oldContent, newContent, onApply, onReject }
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-gray-200 bg-gray-50">
+      <div className="flex items-center justify-end gap-2 px-3 py-2 border-t bg-amber-50">
         <button
           onClick={onReject}
-          className="px-3 py-1.5 text-sm text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+          className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded"
         >
           Reject
         </button>
         <button
           onClick={onApply}
-          className="px-3 py-1.5 text-sm text-white bg-blue-600 rounded hover:bg-blue-700"
+          className="px-3 py-1.5 text-sm text-white bg-amber-500 rounded hover:bg-amber-600 font-medium"
         >
           Apply Changes
         </button>

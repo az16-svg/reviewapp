@@ -19,6 +19,7 @@ interface ArtifactPanelProps {
   onClose: () => void;
   onApplyEdit: (editId: string) => void;
   onRejectEdit: (editId: string) => void;
+  onSaveFile: (filename: string, content: string) => void;
   rightOffset?: number; // Offset from right edge when ChatPanel is also open
 }
 
@@ -28,10 +29,12 @@ export function ArtifactPanel({
   onClose,
   onApplyEdit,
   onRejectEdit,
+  onSaveFile,
   rightOffset = 0,
 }: ArtifactPanelProps) {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'rendered' | 'source'>('rendered');
+  const [editedContent, setEditedContent] = useState<string | null>(null); // null = not editing
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Start with default width to avoid hydration mismatch
@@ -109,6 +112,27 @@ export function ArtifactPanel({
     const file = projectContext?.files.find((f) => f.name === selectedFile);
     return file?.content || '';
   }, [selectedFile, projectContext]);
+
+  // Reset edited content when file selection changes
+  useEffect(() => {
+    setEditedContent(null);
+  }, [selectedFile]);
+
+  // Check if content has been modified
+  const hasUnsavedChanges = editedContent !== null && editedContent !== selectedFileContent;
+
+  // Handle save
+  const handleSave = useCallback(() => {
+    if (selectedFile && editedContent !== null) {
+      onSaveFile(selectedFile, editedContent);
+      setEditedContent(null);
+    }
+  }, [selectedFile, editedContent, onSaveFile]);
+
+  // Handle cancel
+  const handleCancel = useCallback(() => {
+    setEditedContent(null);
+  }, []);
 
   // Save panel width to localStorage
   useEffect(() => {
@@ -268,10 +292,30 @@ export function ArtifactPanel({
                 </div>
               </div>
             ) : (
-              <div className="h-full overflow-auto">
-                <pre className="p-4 text-xs font-mono whitespace-pre-wrap">
-                  {selectedFileContent}
-                </pre>
+              <div className="h-full flex flex-col">
+                <textarea
+                  value={editedContent ?? selectedFileContent}
+                  onChange={(e) => setEditedContent(e.target.value)}
+                  className="flex-1 p-4 text-xs font-mono resize-none border-none outline-none bg-white"
+                  spellCheck={false}
+                />
+                {/* Save/Cancel buttons when content has changed */}
+                {hasUnsavedChanges && (
+                  <div className="flex-shrink-0 p-3 border-t bg-amber-50 flex items-center justify-end gap-2">
+                    <button
+                      onClick={handleCancel}
+                      className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      className="px-3 py-1.5 text-sm bg-amber-500 text-white hover:bg-amber-600 rounded font-medium"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

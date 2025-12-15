@@ -556,6 +556,16 @@ export default function Home() {
     );
   }, []);
 
+  // Save file content directly (from manual editing)
+  const handleSaveFile = useCallback((filename: string, content: string) => {
+    setProjectContext((prev) => ({
+      files: (prev?.files || []).map((f) =>
+        f.name === filename ? { ...f, content } : f
+      ),
+      loadedAt: prev?.loadedAt,
+    }));
+  }, []);
+
   return (
     <main className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
@@ -963,6 +973,7 @@ export default function Home() {
               onClose={() => setIsArtifactPanelOpen(false)}
               onApplyEdit={handleApplyEdit}
               onRejectEdit={handleRejectEdit}
+              onSaveFile={handleSaveFile}
               rightOffset={isChatOpen ? chatPanelWidth : 0}
             />
           )}
