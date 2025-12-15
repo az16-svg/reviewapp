@@ -41,6 +41,7 @@ export default function Home() {
   const [isArtifactPanelOpen, setIsArtifactPanelOpen] = useState(false);
   const [pendingEdits, setPendingEdits] = useState<PendingEdit[]>([]);
   const [chatPanelWidth, setChatPanelWidth] = useState(400);
+  const [isChangesPanelCollapsed, setIsChangesPanelCollapsed] = useState(false);
   const imageViewerContainerRef = useRef<HTMLDivElement>(null);
 
   // Check if before/after mode is available (both previous and new images exist)
@@ -601,83 +602,113 @@ export default function Home() {
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Left side: Change list (narrower) */}
-        <div className="w-80 flex-shrink-0 border-r bg-white flex flex-col overflow-hidden">
-          <div className="p-3 border-b bg-gray-50">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h2 className="font-medium text-gray-900">
-                  Changes ({currentPage?.changes.length ?? 0})
-                </h2>
-                <button
-                  onClick={() => setShowChangeTooltips((prev) => !prev)}
-                  className={`p-1 rounded transition-colors ${showChangeTooltips ? styles.toggleActive : 'text-gray-400 hover:text-gray-600'}`}
-                  title={showChangeTooltips ? 'Hide tooltips' : 'Show tooltips'}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    {showChangeTooltips ? (
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    ) : (
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                    )}
-                  </svg>
-                </button>
-                <button
-                  onClick={handleUndo}
-                  disabled={undoStack.length === 0}
-                  className={`p-1 rounded transition-colors ${undoStack.length === 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-gray-600'}`}
-                  title="Undo (Ctrl+Z)"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
-                  </svg>
-                </button>
-              </div>
-              <div className="flex items-center gap-1">
-                {currentPage && currentPage.changes.length > 0 && (
-                  <button
-                    onClick={handleApproveAll}
-                    className={`h-7 px-2 text-xs rounded transition-colors ${styles.buttonPrimarySmall}`}
-                    title={currentPage.changes.some((c) => c.approved ?? false) ? 'Unconfirm all changes' : 'Confirm all changes'}
-                  >
-                    {currentPage.changes.some((c) => c.approved ?? false) ? 'Unconfirm All' : 'Confirm All'}
-                  </button>
-                )}
-                <button
-                  onClick={() => setIsDrawingMode(!isDrawingMode)}
-                  disabled={!currentPage}
-                  className={`
-                    w-7 h-7 rounded flex items-center justify-center text-lg font-medium transition-colors
-                    ${isDrawingMode
-                      ? styles.buttonPrimaryActive
-                      : styles.buttonPrimary + ' disabled:opacity-50 disabled:cursor-not-allowed'}
-                  `}
-                  title={isDrawingMode ? 'Cancel drawing (A or Esc)' : 'Add new change (A)'}
-                >
-                  {isDrawingMode ? '×' : '+'}
-                </button>
+        {/* Left side: Change list (collapsible) */}
+        <div className={`flex-shrink-0 border-r bg-white flex flex-col overflow-hidden transition-all duration-200 ${isChangesPanelCollapsed ? 'w-10' : 'w-80'}`}>
+          {isChangesPanelCollapsed ? (
+            /* Collapsed view - just a vertical bar with expand button */
+            <div className="flex flex-col items-center py-3 h-full bg-gray-50">
+              <button
+                onClick={() => setIsChangesPanelCollapsed(false)}
+                className="p-1.5 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-700"
+                title="Expand changes panel"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              <div className="mt-2 text-xs text-gray-500 writing-mode-vertical" style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}>
+                Changes ({currentPage?.changes.length ?? 0})
               </div>
             </div>
-          </div>
-          <div className="flex-1 overflow-y-auto">
-            {currentPage ? (
-              <ChangeList
-                changes={currentPage.changes}
-                hoveredChangeId={hoveredChangeId}
-                selectedChangeId={selectedChangeId}
-                showTooltips={showChangeTooltips}
-                onHover={handleHover}
-                onApprove={handleApprove}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onCenter={handleCenter}
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full p-4 text-gray-500">
-                No page loaded
+          ) : (
+            /* Expanded view */
+            <>
+              <div className="p-3 border-b bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsChangesPanelCollapsed(true)}
+                      className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600"
+                      title="Collapse panel"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                    <h2 className="font-medium text-gray-900">
+                      Changes ({currentPage?.changes.length ?? 0})
+                    </h2>
+                    <button
+                      onClick={() => setShowChangeTooltips((prev) => !prev)}
+                      className={`p-1 rounded transition-colors ${showChangeTooltips ? styles.toggleActive : 'text-gray-400 hover:text-gray-600'}`}
+                      title={showChangeTooltips ? 'Hide tooltips' : 'Show tooltips'}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {showChangeTooltips ? (
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        ) : (
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                        )}
+                      </svg>
+                    </button>
+                    <button
+                      onClick={handleUndo}
+                      disabled={undoStack.length === 0}
+                      className={`p-1 rounded transition-colors ${undoStack.length === 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-gray-600'}`}
+                      title="Undo (Ctrl+Z)"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {currentPage && currentPage.changes.length > 0 && (
+                      <button
+                        onClick={handleApproveAll}
+                        className={`h-7 px-2 text-xs rounded transition-colors ${styles.buttonPrimarySmall}`}
+                        title={currentPage.changes.some((c) => c.approved ?? false) ? 'Unconfirm all changes' : 'Confirm all changes'}
+                      >
+                        {currentPage.changes.some((c) => c.approved ?? false) ? 'Unconfirm All' : 'Confirm All'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setIsDrawingMode(!isDrawingMode)}
+                      disabled={!currentPage}
+                      className={`
+                        w-7 h-7 rounded flex items-center justify-center text-lg font-medium transition-colors
+                        ${isDrawingMode
+                          ? styles.buttonPrimaryActive
+                          : styles.buttonPrimary + ' disabled:opacity-50 disabled:cursor-not-allowed'}
+                      `}
+                      title={isDrawingMode ? 'Cancel drawing (A or Esc)' : 'Add new change (A)'}
+                    >
+                      {isDrawingMode ? '×' : '+'}
+                    </button>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
+              <div className="flex-1 overflow-y-auto">
+                {currentPage ? (
+                  <ChangeList
+                    changes={currentPage.changes}
+                    hoveredChangeId={hoveredChangeId}
+                    selectedChangeId={selectedChangeId}
+                    showTooltips={showChangeTooltips}
+                    onHover={handleHover}
+                    onApprove={handleApprove}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onCenter={handleCenter}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full p-4 text-gray-500">
+                    No page loaded
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Right side: Image viewer (takes remaining space) */}
