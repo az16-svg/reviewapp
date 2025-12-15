@@ -292,7 +292,7 @@ export function ChatPanel({ projectContext, sheetContext, onClose, onToolCall }:
             ? 'Upload project context first...'
             : isLoading
             ? 'Waiting for response...'
-            : 'Ask about the drawings...'
+            : 'What can I help you with?'
         }
       />
     </div>
