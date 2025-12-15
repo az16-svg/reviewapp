@@ -13,13 +13,21 @@ const MAX_WIDTH = 600;
 const DEFAULT_WIDTH = 400;
 const STORAGE_KEY = 'chatPanelWidth';
 
+interface ToolCallEvent {
+  type: 'tool_call';
+  toolName: string;
+  toolCallId: string;
+  arguments: Record<string, string>;
+}
+
 interface ChatPanelProps {
   projectContext: ProjectContext | null;
   sheetContext: SheetsData | null;
   onClose: () => void;
+  onToolCall?: (event: ToolCallEvent) => void;
 }
 
-export function ChatPanel({ projectContext, sheetContext, onClose }: ChatPanelProps) {
+export function ChatPanel({ projectContext, sheetContext, onClose, onToolCall }: ChatPanelProps) {
   const {
     conversation,
     isLoading,
@@ -28,7 +36,7 @@ export function ChatPanel({ projectContext, sheetContext, onClose }: ChatPanelPr
     sendMessage,
     clearConversation,
     retryLastMessage,
-  } = useChat({ projectContext, sheetContext });
+  } = useChat({ projectContext, sheetContext, onToolCall });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);

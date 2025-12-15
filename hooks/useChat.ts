@@ -5,9 +5,17 @@ import type { Message, Conversation, ChatStreamEvent, ChatRequest } from '@/type
 import type { ProjectContext } from '@/types/context';
 import type { SheetsData } from '@/types/change';
 
+interface ToolCallEvent {
+  type: 'tool_call';
+  toolName: string;
+  toolCallId: string;
+  arguments: Record<string, string>;
+}
+
 interface UseChatOptions {
   projectContext: ProjectContext | null;
   sheetContext: SheetsData | null;
+  onToolCall?: (event: ToolCallEvent) => void;
 }
 
 interface UseChatReturn {
@@ -20,7 +28,7 @@ interface UseChatReturn {
   retryLastMessage: () => Promise<void>;
 }
 
-export function useChat({ projectContext, sheetContext }: UseChatOptions): UseChatReturn {
+export function useChat({ projectContext, sheetContext, onToolCall }: UseChatOptions): UseChatReturn {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
@@ -163,6 +171,9 @@ export function useChat({ projectContext, sheetContext }: UseChatOptions): UseCh
                   }
                 } else if (event.type === 'error') {
                   throw new Error(event.error.message);
+                } else if (event.type === 'tool_call') {
+                  // Notify parent of tool call for artifact panel
+                  onToolCall?.(event as ToolCallEvent);
                 }
               } catch (parseError) {
                 // Skip invalid JSON lines
@@ -223,7 +234,7 @@ export function useChat({ projectContext, sheetContext }: UseChatOptions): UseCh
         abortControllerRef.current = null;
       }
     },
-    [conversation, initConversation, isLoading, projectContext, sheetContext]
+    [conversation, initConversation, isLoading, projectContext, sheetContext, onToolCall]
   );
 
   const clearConversation = useCallback(() => {

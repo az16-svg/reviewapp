@@ -10,11 +10,13 @@ import { PageTabs } from '@/components/PageTabs';
 import { LegendPanel } from '@/components/LegendPanel';
 import { ProjectContextButton } from '@/components/ProjectContextButton';
 import { ChatPanel } from '@/components/ChatPanel';
+import { ArtifactPanel } from '@/components/ArtifactPanel';
 import { usePages } from '@/hooks/usePages';
 import { useToast } from '@/components/Toast';
 import { styles, theme } from '@/lib/theme';
 import type { AnalysisResult, Change, BoundingBox, DrawingState, ImageData, ViewMode, BeforeAfterImage, SheetsData } from '@/types/change';
 import type { ProjectContext } from '@/types/context';
+import type { PendingEdit } from '@/types/artifact';
 import { rawChangeToChange, generateId, changeToRawChange } from '@/types/change';
 
 export default function Home() {
@@ -36,6 +38,9 @@ export default function Home() {
   const [showLegendPanel, setShowLegendPanel] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isMagnifierMode, setIsMagnifierMode] = useState(false);
+  const [isArtifactPanelOpen, setIsArtifactPanelOpen] = useState(false);
+  const [pendingEdits, setPendingEdits] = useState<PendingEdit[]>([]);
+  const [chatPanelWidth, setChatPanelWidth] = useState(400);
   const imageViewerContainerRef = useRef<HTMLDivElement>(null);
 
   // Check if before/after mode is available (both previous and new images exist)
@@ -70,14 +75,22 @@ export default function Home() {
         return;
       }
 
-      // Escape to cancel drawing mode or close chat panel
+      // Escape to cancel drawing mode or close panels
       if (e.key === 'Escape') {
         if (isDrawingMode) {
           setIsDrawingMode(false);
           setDrawingState(null);
         } else if (isChatOpen) {
           setIsChatOpen(false);
+        } else if (isArtifactPanelOpen) {
+          setIsArtifactPanelOpen(false);
         }
+      }
+
+      // 'P' key to toggle artifact panel
+      if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        setIsArtifactPanelOpen((prev) => !prev);
       }
 
       // 'Q' key to toggle chat panel
@@ -167,7 +180,7 @@ export default function Home() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isDrawingMode, editingChangeId, pendingNewChange, currentPage, hoveredChangeId, updatePageChanges, viewMode, canUseBeforeAfter]);
+  }, [isDrawingMode, editingChangeId, pendingNewChange, currentPage, hoveredChangeId, updatePageChanges, viewMode, canUseBeforeAfter, isChatOpen, isArtifactPanelOpen]);
 
   const handleUndo = useCallback(() => {
     if (undoStack.length === 0) return;
@@ -449,12 +462,108 @@ export default function Home() {
     showToast(`Failed to load context: ${error}`, 'error');
   }, [showToast]);
 
+  // Handle tool calls from AI agent (for artifact panel)
+  const handleToolCall = useCallback((event: { type: 'tool_call'; toolName: string; toolCallId: string; arguments: Record<string, string> }) => {
+    const validTools = ['update_context_file', 'create_context_file', 'edit_context_file'];
+    if (!validTools.includes(event.toolName)) return;
+
+    const filename = event.arguments.filename;
+    const editType = event.arguments.editType as 'update' | 'create' | 'edit';
+    const oldContent = projectContext?.files.find((f) => f.name === filename)?.content;
+
+    let newContent: string;
+    let oldText: string | undefined;
+    let newText: string | undefined;
+
+    if (editType === 'edit') {
+      // Search/replace edit - compute the new content
+      oldText = event.arguments.old_text;
+      newText = event.arguments.new_text;
+      if (oldContent && oldText) {
+        if (!oldContent.includes(oldText)) {
+          // Text not found - still show the edit but it will fail
+          console.warn(`Text not found in file: "${oldText.substring(0, 50)}..."`);
+        }
+        newContent = oldContent.replace(oldText, newText || '');
+      } else {
+        newContent = oldContent || '';
+      }
+    } else if (editType === 'create') {
+      newContent = event.arguments.content || '';
+    } else {
+      // update - full replacement
+      newContent = event.arguments.new_content || '';
+    }
+
+    const edit: PendingEdit = {
+      id: event.toolCallId,
+      type: editType,
+      filename,
+      newContent,
+      oldContent: editType === 'create' ? undefined : oldContent,
+      oldText,
+      newText,
+      status: 'pending',
+    };
+
+    setPendingEdits((prev) => [...prev, edit]);
+    setIsArtifactPanelOpen(true); // Auto-open panel to show pending edit
+  }, [projectContext]);
+
+  // Apply a pending edit (update projectContext)
+  const handleApplyEdit = useCallback((editId: string) => {
+    const edit = pendingEdits.find((e) => e.id === editId);
+    if (!edit) return;
+
+    if (edit.type === 'create') {
+      // Add new file
+      const newFile = { name: edit.filename, content: edit.newContent };
+      setProjectContext((prev) => ({
+        files: [...(prev?.files || []), newFile],
+        loadedAt: prev?.loadedAt,
+      }));
+    } else {
+      // Update existing file
+      setProjectContext((prev) => ({
+        files: (prev?.files || []).map((f) =>
+          f.name === edit.filename ? { ...f, content: edit.newContent } : f
+        ),
+        loadedAt: prev?.loadedAt,
+      }));
+    }
+
+    // Mark as applied
+    setPendingEdits((prev) =>
+      prev.map((e) => (e.id === editId ? { ...e, status: 'applied' as const } : e))
+    );
+    showToast(`Applied changes to ${edit.filename}`, 'success');
+  }, [pendingEdits, showToast]);
+
+  // Reject a pending edit
+  const handleRejectEdit = useCallback((editId: string) => {
+    const edit = pendingEdits.find((e) => e.id === editId);
+    setPendingEdits((prev) =>
+      prev.map((e) => (e.id === editId ? { ...e, status: 'rejected' as const } : e))
+    );
+    if (edit) {
+      showToast(`Rejected changes to ${edit.filename}`, 'info');
+    }
+  }, [pendingEdits, showToast]);
+
   return (
     <main className="h-screen flex flex-col overflow-hidden">
       {/* Header */}
       <header className="flex-shrink-0 px-4 py-3 border-b bg-white flex items-center justify-between">
-        <div>
+        <div className="flex items-center gap-3">
           <h1 className="text-xl font-bold text-gray-900">BuildTrace</h1>
+          <div className="w-px h-6 bg-gray-300" />
+          <PageTabs
+            pages={pages}
+            currentPageIndex={currentPageIndex}
+            onSelectPage={handleSelectPage}
+            onDeletePage={handleDeletePage}
+            onAddPage={() => setIsUploadModalOpen(true)}
+          />
         </div>
         <div className="flex items-center gap-3">
           <ProjectContextButton
@@ -474,17 +583,6 @@ export default function Home() {
           {pages.length > 0 && <ExportButton pages={pages} />}
         </div>
       </header>
-
-      {/* Page tabs for multi-page navigation */}
-      <div className="flex-shrink-0 px-4 py-2 border-b bg-gray-50">
-        <PageTabs
-          pages={pages}
-          currentPageIndex={currentPageIndex}
-          onSelectPage={handleSelectPage}
-          onDeletePage={handleDeletePage}
-          onAddPage={() => setIsUploadModalOpen(true)}
-        />
-      </div>
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left side: Change list (narrower) */}
@@ -577,81 +675,9 @@ export default function Home() {
                   {currentPage.imageWidth} × {currentPage.imageHeight}
                 </span>
               )}
-              {isDrawingMode && currentPage && (
-                <span className="text-sm text-blue-600">
-                  — Click and drag to draw bounding box. Escape to cancel.
-                </span>
-              )}
-            </div>
-            {currentPage && (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={handleZoomOut}
-                  disabled={zoomLevel <= 0.2}
-                  className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Zoom out (Ctrl -)"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => {
-                    setZoomLevel(0.2);
-                    setTimeout(() => {
-                      if (imageViewerContainerRef.current) {
-                        imageViewerContainerRef.current.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
-                      }
-                    }, 10);
-                  }}
-                  className="px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded min-w-[60px]"
-                  title="Reset zoom (R)"
-                >
-                  {Math.round(zoomLevel * 100)}%
-                </button>
-                <button
-                  onClick={handleZoomIn}
-                  disabled={zoomLevel >= 4}
-                  className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Zoom in (Ctrl +)"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => {
-                    setZoomLevel(0.2);
-                    setTimeout(() => {
-                      if (imageViewerContainerRef.current) {
-                        imageViewerContainerRef.current.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
-                      }
-                    }, 10);
-                  }}
-                  className="p-1.5 rounded hover:bg-gray-100"
-                  title="Recenter view (R)"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                  </svg>
-                </button>
 
-                {/* Magnifier Toggle */}
-                <button
-                  onClick={() => {
-                    setIsMagnifierMode(!isMagnifierMode);
-                    if (!isMagnifierMode) setIsDrawingMode(false);
-                  }}
-                  className={`p-1.5 rounded transition-colors ${
-                    isMagnifierMode ? styles.toggleActiveLight : 'hover:bg-gray-100'
-                  }`}
-                  title={isMagnifierMode ? 'Disable magnifier (M)' : 'Enable magnifier (M)'}
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </button>
-
+              {/* Panel toggle icons */}
+              <div className="flex items-center gap-1 pl-2 border-l border-gray-200">
                 {/* Legend Panel Toggle - only show if legend or sheets data exists */}
                 {(currentPage?.legendImage || currentPage?.sheetsData) && (
                   <button
@@ -662,10 +688,28 @@ export default function Home() {
                     title={showLegendPanel ? 'Hide sheet info (I)' : 'Show sheet info (I)'}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </button>
                 )}
+
+                {/* Artifact Panel Toggle */}
+                <button
+                  onClick={() => setIsArtifactPanelOpen(!isArtifactPanelOpen)}
+                  className={`p-1.5 rounded transition-colors relative ${
+                    isArtifactPanelOpen ? styles.toggleActiveLight : 'hover:bg-gray-100'
+                  }`}
+                  title={isArtifactPanelOpen ? 'Hide Files (P)' : 'View Files (P)'}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  {pendingEdits.filter((e) => e.status === 'pending').length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white text-xs rounded-full flex items-center justify-center">
+                      {pendingEdits.filter((e) => e.status === 'pending').length}
+                    </span>
+                  )}
+                </button>
 
                 {/* Chat Panel Toggle */}
                 <button
@@ -679,72 +723,150 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
                 </button>
-
-                {/* Before/After Image Toggle - only show in before-after mode */}
-                {viewMode === 'before-after' && canUseBeforeAfter && (
-                  <>
-                    <div className="w-px h-6 bg-gray-300 mx-2" />
-                    <div className="flex items-center">
-                      <div className="flex items-center gap-0.5 bg-gray-200 rounded p-0.5">
-                        <button
-                          onClick={() => setBeforeAfterImage('previous')}
-                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                            beforeAfterImage === 'previous'
-                              ? styles.buttonPrimaryActive
-                              : 'text-gray-700 hover:bg-gray-300'
-                          }`}
-                        >
-                          Previous
-                        </button>
-                        <button
-                          onClick={() => setBeforeAfterImage('new')}
-                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                            beforeAfterImage === 'new'
-                              ? styles.buttonPrimaryActive
-                              : 'text-gray-700 hover:bg-gray-300'
-                          }`}
-                        >
-                          New
-                        </button>
-                      </div>
-                      <span className="text-xs text-gray-500 ml-1">(Space)</span>
-                    </div>
-                  </>
-                )}
-
-                {/* View Mode Toggle - only show if before/after images are available */}
-                {canUseBeforeAfter && (
-                  <>
-                    <div className="w-px h-6 bg-gray-300 mx-2" />
-                    <div className="flex items-center">
-                      <div className="flex items-center gap-0.5 bg-gray-200 rounded p-0.5">
-                        <button
-                          onClick={() => setViewMode('overlay')}
-                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                            viewMode === 'overlay'
-                              ? styles.buttonPrimaryActive
-                              : 'text-gray-700 hover:bg-gray-300'
-                          }`}
-                        >
-                          Overlay
-                        </button>
-                        <button
-                          onClick={() => setViewMode('before-after')}
-                          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                            viewMode === 'before-after'
-                              ? styles.buttonPrimaryActive
-                              : 'text-gray-700 hover:bg-gray-300'
-                          }`}
-                        >
-                          Before/After
-                        </button>
-                      </div>
-                      <span className="text-xs text-gray-500 ml-1">(B)</span>
-                    </div>
-                  </>
-                )}
               </div>
-            )}
+
+              {/* Zoom and magnifier controls */}
+              {currentPage && (
+                <div className="flex items-center gap-1 pl-2 border-l border-gray-200">
+                  <button
+                    onClick={handleZoomOut}
+                    disabled={zoomLevel <= 0.2}
+                    className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Zoom out (Ctrl -)"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setZoomLevel(0.2);
+                      setTimeout(() => {
+                        if (imageViewerContainerRef.current) {
+                          imageViewerContainerRef.current.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
+                        }
+                      }, 10);
+                    }}
+                    className="px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded min-w-[60px]"
+                    title="Reset zoom (R)"
+                  >
+                    {Math.round(zoomLevel * 100)}%
+                  </button>
+                  <button
+                    onClick={handleZoomIn}
+                    disabled={zoomLevel >= 4}
+                    className="p-1.5 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Zoom in (Ctrl +)"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setZoomLevel(0.2);
+                      setTimeout(() => {
+                        if (imageViewerContainerRef.current) {
+                          imageViewerContainerRef.current.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
+                        }
+                      }, 10);
+                    }}
+                    className="p-1.5 rounded hover:bg-gray-100"
+                    title="Recenter view (R)"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                  </button>
+
+                  {/* Magnifier Toggle */}
+                  <button
+                    onClick={() => {
+                      setIsMagnifierMode(!isMagnifierMode);
+                      if (!isMagnifierMode) setIsDrawingMode(false);
+                    }}
+                    className={`p-1.5 rounded transition-colors ${
+                      isMagnifierMode ? styles.toggleActiveLight : 'hover:bg-gray-100'
+                    }`}
+                    title={isMagnifierMode ? 'Disable magnifier (M)' : 'Enable magnifier (M)'}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+
+              {/* Before/After and View Mode toggles */}
+              {currentPage && canUseBeforeAfter && (
+                <div className="flex items-center gap-1 pl-2 border-l border-gray-200">
+                  {/* Before/After Image Toggle - only show in before-after mode */}
+                  {viewMode === 'before-after' && (
+                    <>
+                      <div className="flex items-center">
+                        <div className="flex items-center gap-0.5 bg-gray-200 rounded p-0.5">
+                          <button
+                            onClick={() => setBeforeAfterImage('previous')}
+                            className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                              beforeAfterImage === 'previous'
+                                ? styles.buttonPrimaryActive
+                                : 'text-gray-700 hover:bg-gray-300'
+                            }`}
+                          >
+                            Previous
+                          </button>
+                          <button
+                            onClick={() => setBeforeAfterImage('new')}
+                            className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                              beforeAfterImage === 'new'
+                                ? styles.buttonPrimaryActive
+                                : 'text-gray-700 hover:bg-gray-300'
+                            }`}
+                          >
+                            New
+                          </button>
+                        </div>
+                        <span className="text-xs text-gray-500 ml-1">(Space)</span>
+                      </div>
+                      <div className="w-px h-6 bg-gray-300 mx-1" />
+                    </>
+                  )}
+
+                  {/* View Mode Toggle */}
+                  <div className="flex items-center">
+                    <div className="flex items-center gap-0.5 bg-gray-200 rounded p-0.5">
+                      <button
+                        onClick={() => setViewMode('overlay')}
+                        className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                          viewMode === 'overlay'
+                            ? styles.buttonPrimaryActive
+                            : 'text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        Overlay
+                      </button>
+                      <button
+                        onClick={() => setViewMode('before-after')}
+                        className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                          viewMode === 'before-after'
+                            ? styles.buttonPrimaryActive
+                            : 'text-gray-700 hover:bg-gray-300'
+                        }`}
+                      >
+                        Before/After
+                      </button>
+                    </div>
+                    <span className="text-xs text-gray-500 ml-1">(B)</span>
+                  </div>
+                </div>
+              )}
+
+              {isDrawingMode && currentPage && (
+                <span className="text-sm text-blue-600">
+                  — Click and drag to draw bounding box. Escape to cancel.
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Image viewer with scroll */}
@@ -827,12 +949,25 @@ export default function Home() {
             />
           )}
 
+          {/* Artifact Panel - View/edit project context files */}
+          {isArtifactPanelOpen && (
+            <ArtifactPanel
+              projectContext={projectContext}
+              pendingEdits={pendingEdits.filter((e) => e.status === 'pending')}
+              onClose={() => setIsArtifactPanelOpen(false)}
+              onApplyEdit={handleApplyEdit}
+              onRejectEdit={handleRejectEdit}
+              rightOffset={isChatOpen ? chatPanelWidth : 0}
+            />
+          )}
+
           {/* Chat Panel - AI assistant for drawing questions */}
           {isChatOpen && (
             <ChatPanel
               projectContext={projectContext}
               sheetContext={currentPage?.sheetsData ?? null}
               onClose={() => setIsChatOpen(false)}
+              onToolCall={handleToolCall}
             />
           )}
         </div>
