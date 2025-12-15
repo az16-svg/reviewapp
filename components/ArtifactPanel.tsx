@@ -34,18 +34,19 @@ export function ArtifactPanel({
   const [viewMode, setViewMode] = useState<'rendered' | 'source'>('rendered');
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const [panelWidth, setPanelWidth] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = parseInt(saved, 10);
-        if (!isNaN(parsed) && parsed >= MIN_WIDTH && parsed <= MAX_WIDTH) {
-          return parsed;
-        }
+  // Start with default width to avoid hydration mismatch
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
+
+  // Load saved width from localStorage after mount
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      if (!isNaN(parsed) && parsed >= MIN_WIDTH && parsed <= MAX_WIDTH) {
+        setPanelWidth(parsed);
       }
     }
-    return DEFAULT_WIDTH;
-  });
+  }, []);
   const [isResizing, setIsResizing] = useState(false);
 
   // Get list of files (from context + any pending creates)
@@ -87,6 +88,20 @@ export function ArtifactPanel({
       (e) => e.filename === selectedFile && e.status === 'pending'
     );
   }, [selectedFile, pendingEdits]);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('[ArtifactPanel] State:', {
+      pendingEditsCount: pendingEdits.length,
+      pendingEdits: pendingEdits.map(e => ({ filename: e.filename, type: e.type, status: e.status })),
+      selectedFile,
+      pendingEditForSelected: pendingEditForSelected ? {
+        filename: pendingEditForSelected.filename,
+        type: pendingEditForSelected.type,
+      } : null,
+      filesCount: files.length,
+    });
+  }, [pendingEdits, selectedFile, pendingEditForSelected, files]);
 
   // Get content for selected file
   const selectedFileContent = useMemo(() => {

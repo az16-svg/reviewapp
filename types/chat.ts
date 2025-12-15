@@ -45,6 +45,12 @@ export interface Message {
 
   /** References to context used for this response */
   contextRefs?: ContextReference[];
+
+  /** Tool progress info for assistant messages that used tools */
+  toolProgress?: {
+    toolName: string;
+    tokenCount: number;
+  };
 }
 
 export interface MessageError {
@@ -84,6 +90,7 @@ export type ChatStreamEvent =
   | { type: 'text_delta'; content: string }
   | { type: 'thinking'; content: string }
   | { type: 'tool_start'; toolName: string; toolCallId: string }
+  | { type: 'tool_progress'; toolCallId: string; delta: string }
   | { type: 'tool_call'; toolName: string; toolCallId: string; arguments: Record<string, string> }
   | { type: 'done'; finalContent: string; responseId?: string }
   | { type: 'error'; error: { code: string; message: string } };

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, RefreshCw, Trash2, AlertTriangle, MessageSquare } from 'lucide-react';
+import { X, RefreshCw, Trash2, AlertTriangle, MessageSquare, Check } from 'lucide-react';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import { useChat } from '@/hooks/useChat';
@@ -12,6 +12,28 @@ const MIN_WIDTH = 320;
 const MAX_WIDTH = 600;
 const DEFAULT_WIDTH = 400;
 const STORAGE_KEY = 'chatPanelWidth';
+
+// Map tool names to user-friendly descriptions
+const TOOL_DESCRIPTIONS: Record<string, string> = {
+  edit_context_file: 'Editing file',
+  update_context_file: 'Rewriting file',
+  create_context_file: 'Creating file',
+  'preparing tool call': 'Preparing changes',
+  completed: 'Changes ready',
+};
+
+function getToolDescription(toolName: string): string {
+  return TOOL_DESCRIPTIONS[toolName] || 'Working';
+}
+
+function isToolCompleted(toolName: string | null): boolean {
+  return toolName === 'completed';
+}
+
+function estimateTokens(text: string): number {
+  // Rough estimate: ~4 characters per token for English text
+  return Math.ceil(text.length / 4);
+}
 
 interface ToolCallEvent {
   type: 'tool_call';
@@ -42,18 +64,19 @@ export function ChatPanel({ projectContext, sheetContext, onClose, onToolCall }:
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  const [panelWidth, setPanelWidth] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = parseInt(saved, 10);
-        if (!isNaN(parsed) && parsed >= MIN_WIDTH && parsed <= MAX_WIDTH) {
-          return parsed;
-        }
+  // Start with default width to avoid hydration mismatch, then load from localStorage
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
+
+  // Load saved width from localStorage after mount
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      if (!isNaN(parsed) && parsed >= MIN_WIDTH && parsed <= MAX_WIDTH) {
+        setPanelWidth(parsed);
       }
     }
-    return DEFAULT_WIDTH;
-  });
+  }, []);
   const [isResizing, setIsResizing] = useState(false);
 
   // Auto-scroll to bottom when new messages arrive
@@ -179,13 +202,53 @@ export function ChatPanel({ projectContext, sheetContext, onClose, onToolCall }:
             {messages.map((message, index) => {
               const isLastAssistant =
                 message.role === 'assistant' && index === messages.length - 1;
+              // Check if next message is an assistant message (for showing tool progress)
+              const nextMessage = messages[index + 1];
+              const nextIsAssistant = nextMessage?.role === 'assistant';
+
+              // Show live tool progress while streaming
+              const isStreamingWithTool = nextIsAssistant && isLoading && agentStatus.activeTool;
+              // Show persisted tool progress from completed assistant message
+              const hasPersistedToolProgress = nextIsAssistant && nextMessage.toolProgress;
+
+              const showToolProgress = isStreamingWithTool || hasPersistedToolProgress;
+
+              // Determine if we're showing live or persisted data
+              const isLive = isStreamingWithTool;
+              const toolName = isLive ? agentStatus.activeTool : nextMessage?.toolProgress?.toolName;
+              const tokenCount = isLive
+                ? (agentStatus.toolProgress ? estimateTokens(agentStatus.toolProgress) : 0)
+                : (nextMessage?.toolProgress?.tokenCount || 0);
+              const isCompleted = isLive ? isToolCompleted(agentStatus.activeTool) : true;
+
               return (
-                <ChatMessage
-                  key={message.id}
-                  message={message}
-                  isStreaming={isLastAssistant && isLoading}
-                  streamingContent={isLastAssistant ? streamingContent : undefined}
-                />
+                <div key={message.id}>
+                  <ChatMessage
+                    message={message}
+                    isStreaming={isLastAssistant && isLoading}
+                    streamingContent={isLastAssistant ? streamingContent : undefined}
+                  />
+                  {/* Tool progress indicator - shown right after user's message, before assistant response */}
+                  {showToolProgress && (
+                    <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
+                      <div className="flex items-center gap-2 text-sm text-slate-600">
+                        {isCompleted ? (
+                          <Check className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                        ) : (
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse flex-shrink-0" />
+                        )}
+                        <span className={isCompleted ? 'text-green-700' : ''}>
+                          {getToolDescription(toolName || 'completed')}
+                        </span>
+                        {tokenCount > 0 && (
+                          <span className="text-slate-400">
+                            ({tokenCount.toLocaleString()} tokens)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -193,18 +256,12 @@ export function ChatPanel({ projectContext, sheetContext, onClose, onToolCall }:
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Agent status indicator */}
-      {isLoading && (agentStatus.thinking || agentStatus.activeTool) && (
+      {/* Agent thinking indicator (not tool progress - that's shown inline) */}
+      {isLoading && agentStatus.thinking && !agentStatus.activeTool && (
         <div className="flex-shrink-0 px-4 py-2 bg-slate-50 border-t border-slate-200">
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-            {agentStatus.activeTool ? (
-              <span>
-                Using <span className="font-medium text-slate-700">{agentStatus.activeTool.replace(/_/g, ' ')}</span>...
-              </span>
-            ) : agentStatus.thinking ? (
-              <span className="italic text-slate-500 truncate">{agentStatus.thinking}</span>
-            ) : null}
+          <div className="flex items-start gap-2 text-sm text-slate-600">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse flex-shrink-0 mt-1.5" />
+            <span className="italic text-slate-500">{agentStatus.thinking}</span>
           </div>
         </div>
       )}

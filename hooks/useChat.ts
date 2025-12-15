@@ -21,6 +21,7 @@ interface UseChatOptions {
 interface AgentStatus {
   thinking: string | null;
   activeTool: string | null;
+  toolProgress: string | null; // Accumulated tool argument content
 }
 
 interface UseChatReturn {
@@ -38,7 +39,7 @@ export function useChat({ projectContext, sheetContext, onToolCall }: UseChatOpt
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
-  const [agentStatus, setAgentStatus] = useState<AgentStatus>({ thinking: null, activeTool: null });
+  const [agentStatus, setAgentStatus] = useState<AgentStatus>({ thinking: null, activeTool: null, toolProgress: null });
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastMessageRef = useRef<string>('');
@@ -65,7 +66,7 @@ export function useChat({ projectContext, sheetContext, onToolCall }: UseChatOpt
       setError(null);
       setIsLoading(true);
       setStreamingContent('');
-      setAgentStatus({ thinking: null, activeTool: null });
+      setAgentStatus({ thinking: null, activeTool: null, toolProgress: null });
 
       // Initialize conversation if needed
       let currentConversation = conversation;
@@ -157,6 +158,9 @@ export function useChat({ projectContext, sheetContext, onToolCall }: UseChatOpt
 
         const decoder = new TextDecoder();
         let fullContent = '';
+        let lineBuffer = ''; // Buffer for incomplete lines
+        let completedToolName: string | null = null;
+        let completedToolProgress: string | null = null;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -166,7 +170,12 @@ export function useChat({ projectContext, sheetContext, onToolCall }: UseChatOpt
           resetTimeout();
 
           const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+          // Prepend any incomplete line from previous chunk
+          const combined = lineBuffer + chunk;
+          const lines = combined.split('\n');
+
+          // Last element might be incomplete, save it for next iteration
+          lineBuffer = lines.pop() || '';
 
           for (const line of lines) {
             if (line.startsWith('data: ')) {
@@ -185,18 +194,29 @@ export function useChat({ projectContext, sheetContext, onToolCall }: UseChatOpt
                   setAgentStatus((prev) => ({ ...prev, thinking: event.content }));
                 } else if (event.type === 'tool_start') {
                   setAgentStatus((prev) => ({ ...prev, activeTool: event.toolName }));
+                } else if (event.type === 'tool_progress') {
+                  // Accumulate tool argument deltas - set activeTool to generic if not already set
+                  setAgentStatus((prev) => ({
+                    ...prev,
+                    activeTool: prev.activeTool || 'preparing tool call',
+                    toolProgress: (prev.toolProgress || '') + event.delta,
+                  }));
                 } else if (event.type === 'tool_call') {
                   // Notify parent of tool call for artifact panel
                   onToolCall?.(event as ToolCallEvent);
-                  // Clear active tool after it completes
-                  setAgentStatus((prev) => ({ ...prev, activeTool: null }));
+                  // Save tool info for persistence, then mark as completed
+                  setAgentStatus((prev) => {
+                    completedToolName = prev.activeTool || event.toolName;
+                    completedToolProgress = prev.toolProgress;
+                    return { ...prev, activeTool: 'completed' };
+                  });
                 } else if (event.type === 'done') {
                   fullContent = event.finalContent;
                   // Store responseId for follow-up questions
                   if ('responseId' in event && event.responseId) {
                     previousResponseIdRef.current = event.responseId as string;
                   }
-                  setAgentStatus({ thinking: null, activeTool: null });
+                  setAgentStatus({ thinking: null, activeTool: null, toolProgress: null });
                 } else if (event.type === 'error') {
                   throw new Error(event.error.message);
                 }
@@ -210,14 +230,24 @@ export function useChat({ projectContext, sheetContext, onToolCall }: UseChatOpt
           }
         }
 
-        // Update assistant message with final content
+        // Update assistant message with final content and tool progress
         setConversation((prev) => {
           if (!prev) return prev;
           return {
             ...prev,
             messages: prev.messages.map((m) =>
               m.id === assistantMessageId
-                ? { ...m, content: fullContent, isStreaming: false }
+                ? {
+                    ...m,
+                    content: fullContent,
+                    isStreaming: false,
+                    toolProgress: completedToolName && completedToolProgress
+                      ? {
+                          toolName: completedToolName,
+                          tokenCount: Math.ceil(completedToolProgress.length / 4),
+                        }
+                      : undefined,
+                  }
                 : m
             ),
           };

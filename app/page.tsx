@@ -454,13 +454,11 @@ export default function Home() {
 
   const handleProjectContextUpload = useCallback((context: ProjectContext) => {
     setProjectContext(context);
-    const fileCount = context.files.length;
-    showToast(`Loaded ${fileCount} context file${fileCount !== 1 ? 's' : ''}`, 'success');
-  }, [showToast]);
+  }, []);
 
   const handleProjectContextError = useCallback((error: string) => {
-    showToast(`Failed to load context: ${error}`, 'error');
-  }, [showToast]);
+    console.error('Failed to load context:', error);
+  }, []);
 
   // Handle tool calls from AI agent (for artifact panel)
   const handleToolCall = useCallback((event: { type: 'tool_call'; toolName: string; toolCallId: string; arguments: Record<string, string> }) => {
@@ -506,7 +504,20 @@ export default function Home() {
       status: 'pending',
     };
 
-    setPendingEdits((prev) => [...prev, edit]);
+    console.log('[handleToolCall] Creating pending edit:', {
+      id: edit.id,
+      type: edit.type,
+      filename: edit.filename,
+      hasNewContent: !!edit.newContent,
+      newContentLength: edit.newContent?.length,
+      hasOldContent: !!edit.oldContent,
+    });
+
+    setPendingEdits((prev) => {
+      const updated = [...prev, edit];
+      console.log('[handleToolCall] Updated pendingEdits count:', updated.length);
+      return updated;
+    });
     setIsArtifactPanelOpen(true); // Auto-open panel to show pending edit
   }, [projectContext]);
 
@@ -536,19 +547,14 @@ export default function Home() {
     setPendingEdits((prev) =>
       prev.map((e) => (e.id === editId ? { ...e, status: 'applied' as const } : e))
     );
-    showToast(`Applied changes to ${edit.filename}`, 'success');
-  }, [pendingEdits, showToast]);
+  }, [pendingEdits]);
 
   // Reject a pending edit
   const handleRejectEdit = useCallback((editId: string) => {
-    const edit = pendingEdits.find((e) => e.id === editId);
     setPendingEdits((prev) =>
       prev.map((e) => (e.id === editId ? { ...e, status: 'rejected' as const } : e))
     );
-    if (edit) {
-      showToast(`Rejected changes to ${edit.filename}`, 'info');
-    }
-  }, [pendingEdits, showToast]);
+  }, []);
 
   return (
     <main className="h-screen flex flex-col overflow-hidden">
@@ -962,14 +968,15 @@ export default function Home() {
           )}
 
           {/* Chat Panel - AI assistant for drawing questions */}
-          {isChatOpen && (
+          {/* Always mounted to preserve conversation state, but hidden when closed */}
+          <div className={isChatOpen ? '' : 'hidden'}>
             <ChatPanel
               projectContext={projectContext}
               sheetContext={currentPage?.sheetsData ?? null}
               onClose={() => setIsChatOpen(false)}
               onToolCall={handleToolCall}
             />
-          )}
+          </div>
         </div>
       </div>
 
