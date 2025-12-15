@@ -42,10 +42,14 @@ export async function POST(request: NextRequest) {
       sheetContext as SheetsData | null
     );
 
+    // Select model based on environment
+    const env = process.env.ENV || process.env.NODE_ENV;
+    const model = env === 'local' || env === 'development' ? 'gpt-5-mini' : 'gpt-5.1';
+
     // Create agent with context-specific instructions and tools
     const agent = new Agent({
       name: 'Construction Drawing Assistant',
-      model: 'gpt-5-mini',
+      model,
       tools: [editContextFileTool, updateContextFileTool, createContextFileTool, webSearchTool()],
       instructions: `You are an expert construction manager and superintendent, experienced in reading construction drawings, identifying discrepancies and changes between multiple drawings of different disciplines and versions.
 
