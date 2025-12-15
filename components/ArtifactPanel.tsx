@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { X, FileText, Eye, Code, AlertCircle } from 'lucide-react';
+import { X, FileText, Eye, Code, AlertCircle, Download } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { FileDiff } from './FileDiff';
@@ -134,6 +134,99 @@ export function ArtifactPanel({
     setEditedContent(null);
   }, []);
 
+  // Export file as PDF
+  const handleExportPDF = useCallback(() => {
+    if (!selectedFile || !selectedFileContent) return;
+
+    // Create a new window with the rendered markdown content
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to export PDF');
+      return;
+    }
+
+    // Simple markdown to HTML conversion for print
+    // We'll use a basic styling that looks good in print
+    const filename = selectedFile.replace(/\.md$/, '');
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>${filename}</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              max-width: 800px;
+              margin: 40px auto;
+              padding: 20px;
+              line-height: 1.6;
+              color: #333;
+            }
+            h1, h2, h3, h4, h5, h6 {
+              margin-top: 1.5em;
+              margin-bottom: 0.5em;
+              font-weight: 600;
+            }
+            h1 { font-size: 2em; border-bottom: 1px solid #eee; padding-bottom: 0.3em; }
+            h2 { font-size: 1.5em; }
+            h3 { font-size: 1.25em; }
+            p { margin: 1em 0; }
+            ul, ol { margin: 1em 0; padding-left: 2em; }
+            li { margin: 0.25em 0; }
+            code {
+              background: #f4f4f4;
+              padding: 0.2em 0.4em;
+              border-radius: 3px;
+              font-size: 0.9em;
+            }
+            pre {
+              background: #f4f4f4;
+              padding: 1em;
+              border-radius: 5px;
+              overflow-x: auto;
+            }
+            pre code {
+              background: none;
+              padding: 0;
+            }
+            blockquote {
+              border-left: 4px solid #ddd;
+              margin: 1em 0;
+              padding-left: 1em;
+              color: #666;
+            }
+            table {
+              border-collapse: collapse;
+              width: 100%;
+              margin: 1em 0;
+            }
+            th, td {
+              border: 1px solid #ddd;
+              padding: 8px;
+              text-align: left;
+            }
+            th { background: #f4f4f4; }
+            @media print {
+              body { margin: 0; padding: 20px; }
+            }
+          </style>
+        </head>
+        <body>
+          <div id="content"></div>
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+          <script>
+            document.getElementById('content').innerHTML = marked.parse(\`${selectedFileContent.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`);
+            setTimeout(() => {
+              window.print();
+            }, 500);
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }, [selectedFile, selectedFileContent]);
+
   // Save panel width to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -245,31 +338,41 @@ export function ArtifactPanel({
             </div>
           </div>
 
-          {/* View mode toggle (only when no pending edit) */}
+          {/* View mode toggle and export (only when no pending edit) */}
           {!pendingEditForSelected && (
-            <div className="flex-shrink-0 px-3 py-2 border-b flex items-center justify-end gap-1">
+            <div className="flex-shrink-0 px-3 py-2 border-b flex items-center justify-between">
               <button
-                onClick={() => setViewMode('rendered')}
-                className={`flex items-center gap-1 px-2 py-1 text-xs rounded ${
-                  viewMode === 'rendered'
-                    ? 'bg-gray-200 text-gray-900'
-                    : 'text-gray-500 hover:bg-gray-100'
-                }`}
+                onClick={handleExportPDF}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded"
+                title="Export as PDF"
               >
-                <Eye className="w-3 h-3" />
-                Preview
+                <Download className="w-3 h-3" />
+                Export PDF
               </button>
-              <button
-                onClick={() => setViewMode('source')}
-                className={`flex items-center gap-1 px-2 py-1 text-xs rounded ${
-                  viewMode === 'source'
-                    ? 'bg-gray-200 text-gray-900'
-                    : 'text-gray-500 hover:bg-gray-100'
-                }`}
-              >
-                <Code className="w-3 h-3" />
-                Source
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setViewMode('rendered')}
+                  className={`flex items-center gap-1 px-2 py-1 text-xs rounded ${
+                    viewMode === 'rendered'
+                      ? 'bg-gray-200 text-gray-900'
+                      : 'text-gray-500 hover:bg-gray-100'
+                  }`}
+                >
+                  <Eye className="w-3 h-3" />
+                  Preview
+                </button>
+                <button
+                  onClick={() => setViewMode('source')}
+                  className={`flex items-center gap-1 px-2 py-1 text-xs rounded ${
+                    viewMode === 'source'
+                      ? 'bg-gray-200 text-gray-900'
+                      : 'text-gray-500 hover:bg-gray-100'
+                  }`}
+                >
+                  <Code className="w-3 h-3" />
+                  Source
+                </button>
+              </div>
             </div>
           )}
 
