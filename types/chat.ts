@@ -82,6 +82,8 @@ export interface ChatRequest {
 // Streaming response event types
 export type ChatStreamEvent =
   | { type: 'text_delta'; content: string }
+  | { type: 'thinking'; content: string }
+  | { type: 'tool_start'; toolName: string; toolCallId: string }
+  | { type: 'tool_call'; toolName: string; toolCallId: string; arguments: Record<string, string> }
   | { type: 'done'; finalContent: string; responseId?: string }
-  | { type: 'error'; error: { code: string; message: string } }
-  | { type: 'tool_call'; toolName: string; toolCallId: string; arguments: Record<string, string> };
+  | { type: 'error'; error: { code: string; message: string } };

@@ -77,40 +77,64 @@ ${contextPrompt}`,
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        try {
-          console.log('[Chat API] Starting request:', {
-            messageLength: message.length,
-            hasPreviousResponseId: !!previousResponseId,
-            hasProjectContext: !!projectContext,
-            hasSheetContext: !!sheetContext
-          });
+        let isControllerClosed = false;
+        let eventCount = 0;
+        let lastEventTime = Date.now();
+        const collectedContent: string[] = [];
 
+        // Helper to safely enqueue data
+        const safeEnqueue = (data: string) => {
+          if (!isControllerClosed) {
+            try {
+              controller.enqueue(encoder.encode(data));
+              lastEventTime = Date.now();
+            } catch (e) {
+              console.error('[Chat API] Controller closed after', eventCount, 'events');
+              console.error('[Chat API] Time since last event:', Date.now() - lastEventTime, 'ms');
+              console.error('[Chat API] Collected content so far:', collectedContent.join('').substring(0, 500));
+              isControllerClosed = true;
+            }
+          }
+        };
+
+        try {
           // Use previousResponseId for follow-up questions to maintain context
           const runOptions: { stream: true; previousResponseId?: string } = { stream: true };
           if (previousResponseId) {
             runOptions.previousResponseId = previousResponseId;
           }
 
-          console.log('[Chat API] Calling agent.run...');
           const result = await run(agent, message, runOptions);
-          console.log('[Chat API] agent.run returned, starting stream iteration');
 
           let responseId: string | undefined;
           const emittedToolCalls = new Set<string>();
-          let eventCount = 0;
-          let textDeltaCount = 0;
-          let toolCallCount = 0;
+          const emittedToolStarts = new Set<string>();
 
           for await (const event of result) {
             eventCount++;
 
-            // Log every event type for debugging
-            if (eventCount <= 10 || eventCount % 50 === 0) {
-              console.log(`[Chat API] Event #${eventCount}:`, {
-                type: event.type,
-                hasData: 'data' in event,
-                hasItem: 'item' in event,
-              });
+            // Log raw_model_stream_event details
+            if (event.type === 'raw_model_stream_event') {
+              const eventType = event.data?.event?.type;
+              // Log first 30 events, then every 200th
+              if (eventCount <= 30 || eventCount % 200 === 0) {
+                const delta = event.data?.event?.delta;
+                const rawEventStr = event.data?.event ? JSON.stringify(event.data.event) : JSON.stringify(event.data);
+                console.log(`[Chat API] Event #${eventCount}: raw_model_stream_event`, {
+                  dataType: event.data?.type,
+                  eventType: eventType || 'none',
+                  // For text deltas, show the content
+                  ...(eventType === 'response.output_text.delta' && delta && { delta: delta.substring(0, 50) }),
+                  // For other events, show what we have
+                  ...(eventType !== 'response.output_text.delta' && { rawEvent: rawEventStr?.substring(0, 200) }),
+                });
+              }
+            }
+
+            // Log run_item_stream_event
+            if (event.type === 'run_item_stream_event') {
+              const itemType = (event.item as { type?: string })?.type;
+              console.log(`[Chat API] Event #${eventCount}: run_item_stream_event`, itemType);
             }
 
             // Handle streaming text events
@@ -119,16 +143,12 @@ ${contextPrompt}`,
               event.data?.type === 'model' &&
               event.data.event?.type === 'response.output_text.delta'
             ) {
-              textDeltaCount++;
               const chunk = event.data.event.delta;
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({ type: 'text_delta', content: chunk })}\n\n`
-                )
-              );
+              collectedContent.push(chunk);
+              safeEnqueue(`data: ${JSON.stringify({ type: 'text_delta', content: chunk })}\n\n`);
             }
 
-            // Handle tool call events (run_item_stream_event contains tool results)
+            // Handle run_item_stream_event for reasoning, tool calls, and tool outputs
             if (event.type === 'run_item_stream_event' && event.item) {
               const item = event.item as {
                 type?: string;
@@ -137,100 +157,114 @@ ${contextPrompt}`,
                   call_id?: string;
                   name?: string;
                   arguments?: string;
+                  summary?: Array<{ type: string; text: string }>;
                 };
                 output?: string;
               };
 
-              console.log('[Chat API] run_item_stream_event:', {
-                itemType: item.type,
-                hasRawItem: !!item.rawItem,
-                rawItemType: item.rawItem?.type,
-                rawItemName: item.rawItem?.name,
-                hasOutput: !!item.output,
-                outputPreview: item.output?.substring(0, 200),
-              });
+              // Stream reasoning/thinking content to frontend
+              if (item.type === 'reasoning_item') {
+                console.log('[Chat API] reasoning_item:', JSON.stringify(item.rawItem).substring(0, 300));
+                if (item.rawItem?.summary) {
+                  const thinkingText = item.rawItem.summary
+                    .filter((s) => s.type === 'summary_text')
+                    .map((s) => s.text)
+                    .join('');
+                  if (thinkingText) {
+                    console.log('[Chat API] Emitting thinking:', thinkingText.substring(0, 100));
+                    safeEnqueue(`data: ${JSON.stringify({ type: 'thinking', content: thinkingText })}\n\n`);
+                  }
+                }
+              }
 
-              // Check if this is a function call output (tool was executed)
-              if (item.type === 'function_call_output' && item.rawItem && item.output) {
-                const callId = item.rawItem.call_id || crypto.randomUUID();
-                const toolName = item.rawItem.name || 'unknown';
+              // Stream tool call start (when tool is being invoked)
+              if (item.type === 'tool_call_item' && item.rawItem?.name && item.rawItem?.call_id) {
+                const callId = item.rawItem.call_id;
+                if (!emittedToolStarts.has(callId)) {
+                  emittedToolStarts.add(callId);
+                  safeEnqueue(`data: ${JSON.stringify({
+                    type: 'tool_start',
+                    toolName: item.rawItem.name,
+                    toolCallId: callId,
+                  })}\n\n`);
+                }
+              }
 
-                console.log('[Chat API] Tool call detected:', { toolName, callId });
+              // Handle tool call output (tool was executed)
+              const isToolOutput = (
+                (item.type === 'function_call_output' || item.type === 'tool_call_output_item') &&
+                item.rawItem &&
+                item.output
+              );
+
+              if (isToolOutput) {
+                const callId = item.rawItem!.call_id || crypto.randomUUID();
+                const toolName = item.rawItem!.name || 'unknown';
 
                 // Only emit once per tool call
                 if (!emittedToolCalls.has(callId)) {
                   emittedToolCalls.add(callId);
-                  toolCallCount++;
 
                   // Parse the tool output to get the arguments
                   try {
-                    const toolOutput = JSON.parse(item.output);
-                    console.log('[Chat API] Tool output parsed:', toolOutput);
+                    const toolOutput = JSON.parse(item.output!);
 
                     if (toolOutput.action === 'pending_edit') {
-                      console.log('[Chat API] Emitting pending_edit SSE event');
-                      controller.enqueue(
-                        encoder.encode(
-                          `data: ${JSON.stringify({
-                            type: 'tool_call',
-                            toolName,
-                            toolCallId: callId,
-                            arguments: {
-                              editType: toolOutput.type, // 'update', 'create', or 'edit'
-                              filename: toolOutput.filename,
-                              content: toolOutput.content,
-                              new_content: toolOutput.new_content,
-                              old_text: toolOutput.old_text,
-                              new_text: toolOutput.new_text,
-                            },
-                          })}\n\n`
-                        )
-                      );
-                    } else {
-                      console.log('[Chat API] Tool output not a pending_edit:', toolOutput.action);
+                      safeEnqueue(`data: ${JSON.stringify({
+                        type: 'tool_call',
+                        toolName,
+                        toolCallId: callId,
+                        arguments: {
+                          editType: toolOutput.type,
+                          filename: toolOutput.filename,
+                          content: toolOutput.content,
+                          new_content: toolOutput.new_content,
+                          old_text: toolOutput.old_text,
+                          new_text: toolOutput.new_text,
+                        },
+                      })}\n\n`);
                     }
-                  } catch (parseError) {
-                    console.log('[Chat API] Failed to parse tool output:', parseError);
+                  } catch {
+                    // Tool output wasn't JSON, ignore
                   }
                 }
               }
             }
           }
 
-          console.log('[Chat API] Stream iteration complete:', {
-            totalEvents: eventCount,
-            textDeltas: textDeltaCount,
-            toolCalls: toolCallCount,
-          });
-
           // Get the response ID for follow-up questions
           responseId = result.lastResponseId;
 
           // Send done event with final output and responseId for follow-ups
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                type: 'done',
-                finalContent: result.finalOutput,
-                responseId
-              })}\n\n`
-            )
-          );
-          controller.close();
+          safeEnqueue(`data: ${JSON.stringify({
+            type: 'done',
+            finalContent: result.finalOutput,
+            responseId
+          })}\n\n`);
+
+          if (!isControllerClosed) {
+            controller.close();
+          }
         } catch (error) {
           console.error('Chat API error:', error);
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                type: 'error',
-                error: {
-                  code: 'AGENT_ERROR',
-                  message: error instanceof Error ? error.message : 'Unknown error occurred',
-                },
-              })}\n\n`
-            )
-          );
-          controller.close();
+          if (!isControllerClosed) {
+            try {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: 'error',
+                    error: {
+                      code: 'AGENT_ERROR',
+                      message: error instanceof Error ? error.message : 'Unknown error occurred',
+                    },
+                  })}\n\n`
+                )
+              );
+              controller.close();
+            } catch {
+              // Controller already closed, ignore
+            }
+          }
         }
       },
     });

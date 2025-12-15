@@ -18,10 +18,16 @@ interface UseChatOptions {
   onToolCall?: (event: ToolCallEvent) => void;
 }
 
+interface AgentStatus {
+  thinking: string | null;
+  activeTool: string | null;
+}
+
 interface UseChatReturn {
   conversation: Conversation | null;
   isLoading: boolean;
   streamingContent: string;
+  agentStatus: AgentStatus;
   error: string | null;
   sendMessage: (content: string) => Promise<void>;
   clearConversation: () => void;
@@ -32,6 +38,7 @@ export function useChat({ projectContext, sheetContext, onToolCall }: UseChatOpt
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [agentStatus, setAgentStatus] = useState<AgentStatus>({ thinking: null, activeTool: null });
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastMessageRef = useRef<string>('');
@@ -58,6 +65,7 @@ export function useChat({ projectContext, sheetContext, onToolCall }: UseChatOpt
       setError(null);
       setIsLoading(true);
       setStreamingContent('');
+      setAgentStatus({ thinking: null, activeTool: null });
 
       // Initialize conversation if needed
       let currentConversation = conversation;
@@ -107,13 +115,18 @@ export function useChat({ projectContext, sheetContext, onToolCall }: UseChatOpt
         }
         abortControllerRef.current = new AbortController();
 
-        // Set up 30 second timeout
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-        }
-        timeoutRef.current = setTimeout(() => {
-          abortControllerRef.current?.abort();
-        }, 30000);
+        // Set up timeout - reset on each event received
+        const resetTimeout = () => {
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+          }
+          // 2 minute timeout between events (tool calls can take a while)
+          timeoutRef.current = setTimeout(() => {
+            console.warn('[useChat] Request timed out - no events received for 2 minutes');
+            abortControllerRef.current?.abort();
+          }, 120000);
+        };
+        resetTimeout();
 
         // Build request with previousResponseId for follow-ups
         const request = {
@@ -149,6 +162,9 @@ export function useChat({ projectContext, sheetContext, onToolCall }: UseChatOpt
           const { done, value } = await reader.read();
           if (done) break;
 
+          // Reset timeout on each chunk received
+          resetTimeout();
+
           const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split('\n');
 
@@ -163,17 +179,26 @@ export function useChat({ projectContext, sheetContext, onToolCall }: UseChatOpt
                 if (event.type === 'text_delta') {
                   fullContent += event.content;
                   setStreamingContent(fullContent);
+                  // Clear thinking when text starts streaming
+                  setAgentStatus((prev) => ({ ...prev, thinking: null }));
+                } else if (event.type === 'thinking') {
+                  setAgentStatus((prev) => ({ ...prev, thinking: event.content }));
+                } else if (event.type === 'tool_start') {
+                  setAgentStatus((prev) => ({ ...prev, activeTool: event.toolName }));
+                } else if (event.type === 'tool_call') {
+                  // Notify parent of tool call for artifact panel
+                  onToolCall?.(event as ToolCallEvent);
+                  // Clear active tool after it completes
+                  setAgentStatus((prev) => ({ ...prev, activeTool: null }));
                 } else if (event.type === 'done') {
                   fullContent = event.finalContent;
                   // Store responseId for follow-up questions
                   if ('responseId' in event && event.responseId) {
                     previousResponseIdRef.current = event.responseId as string;
                   }
+                  setAgentStatus({ thinking: null, activeTool: null });
                 } else if (event.type === 'error') {
                   throw new Error(event.error.message);
-                } else if (event.type === 'tool_call') {
-                  // Notify parent of tool call for artifact panel
-                  onToolCall?.(event as ToolCallEvent);
                 }
               } catch (parseError) {
                 // Skip invalid JSON lines
@@ -269,6 +294,7 @@ export function useChat({ projectContext, sheetContext, onToolCall }: UseChatOpt
     conversation,
     isLoading,
     streamingContent,
+    agentStatus,
     error,
     sendMessage,
     clearConversation,

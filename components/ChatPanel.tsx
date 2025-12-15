@@ -32,6 +32,7 @@ export function ChatPanel({ projectContext, sheetContext, onClose, onToolCall }:
     conversation,
     isLoading,
     streamingContent,
+    agentStatus,
     error,
     sendMessage,
     clearConversation,
@@ -191,6 +192,22 @@ export function ChatPanel({ projectContext, sheetContext, onClose, onToolCall }:
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Agent status indicator */}
+      {isLoading && (agentStatus.thinking || agentStatus.activeTool) && (
+        <div className="flex-shrink-0 px-4 py-2 bg-slate-50 border-t border-slate-200">
+          <div className="flex items-center gap-2 text-sm text-slate-600">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+            {agentStatus.activeTool ? (
+              <span>
+                Using <span className="font-medium text-slate-700">{agentStatus.activeTool.replace(/_/g, ' ')}</span>...
+              </span>
+            ) : agentStatus.thinking ? (
+              <span className="italic text-slate-500 truncate">{agentStatus.thinking}</span>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       {/* Error with retry */}
       {error && (
